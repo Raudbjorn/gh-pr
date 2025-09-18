@@ -2,7 +2,8 @@
 
 import subprocess
 import shutil
-from typing import Optional
+import shlex
+from typing import Optional, List
 
 
 class ClipboardManager:
@@ -12,12 +13,12 @@ class ClipboardManager:
         """Initialize ClipboardManager."""
         self.clipboard_cmd = self._detect_clipboard_command()
 
-    def _detect_clipboard_command(self) -> Optional[str]:
+    def _detect_clipboard_command(self) -> Optional[List[str]]:
         """
         Detect available clipboard command.
 
         Returns:
-            Clipboard command or None
+            Clipboard command as list of arguments or None
         """
         # Check for WSL
         try:
@@ -25,26 +26,26 @@ class ClipboardManager:
                 if "microsoft" in f.read().lower():
                     # WSL detected
                     if shutil.which("clip.exe"):
-                        return "clip.exe"
+                        return ["clip.exe"]
                     if shutil.which("/mnt/c/Windows/System32/clip.exe"):
-                        return "/mnt/c/Windows/System32/clip.exe"
+                        return ["/mnt/c/Windows/System32/clip.exe"]
         except FileNotFoundError:
             pass
 
         # Check for Wayland
         if shutil.which("wl-copy"):
-            return "wl-copy"
+            return ["wl-copy"]
 
         # Check for X11
         if shutil.which("xclip"):
-            return "xclip -selection clipboard"
+            return ["xclip", "-selection", "clipboard"]
 
         if shutil.which("xsel"):
-            return "xsel --clipboard --input"
+            return ["xsel", "--clipboard", "--input"]
 
         # Check for macOS
         if shutil.which("pbcopy"):
-            return "pbcopy"
+            return ["pbcopy"]
 
         return None
 
@@ -62,26 +63,16 @@ class ClipboardManager:
             return False
 
         try:
-            if self.clipboard_cmd == "clip.exe" or self.clipboard_cmd.endswith("/clip.exe"):
-                # Windows clip.exe doesn't handle UTF-8 well with pipes
-                process = subprocess.Popen(
-                    [self.clipboard_cmd],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                process.communicate(input=text.encode("utf-8"))
-            else:
-                process = subprocess.Popen(
-                    self.clipboard_cmd.split(),
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                process.communicate(input=text.encode("utf-8"))
-
+            # Use the command list directly - it's already properly split
+            process = subprocess.Popen(
+                self.clipboard_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            process.communicate(input=text.encode("utf-8"))
             return process.returncode == 0
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             return False
 
     def is_available(self) -> bool:

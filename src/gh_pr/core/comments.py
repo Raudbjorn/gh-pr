@@ -33,6 +33,7 @@ class CommentProcessor:
                     "start_line": comment.get("start_line"),
                     "is_resolved": False,  # Would need to check via API
                     "is_outdated": self._is_comment_outdated(comment),
+                    "diff_hunk": comment.get("diff_hunk"),  # Include diff hunk for code context
                     "comments": [],
                 }
 

@@ -1,7 +1,7 @@
 """Display and formatting for PR data."""
 
 from typing import Dict, List, Any, Optional
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
@@ -104,31 +104,76 @@ class DisplayManager:
             else:
                 location += f":{thread['line']}"
 
-        # Create panel for thread
-        thread_content = f"{location}\n{status}\n"
+        # Build renderables list
+        renderables = []
+        renderables.append(Text(f"{location}\n{status}"))
+
+        # Add code context if requested and available
+        if show_code and thread.get("diff_hunk"):
+            # Display diff hunk as syntax-highlighted code
+            # Try to determine language from file extension
+            file_path = thread.get("path", "")
+            lang = self._get_language_from_path(file_path)
+
+            renderables.append(Text("\n📝 Code Context:", style="bold"))
+            renderables.append(Syntax(thread["diff_hunk"], lang, theme="monokai", line_numbers=False))
 
         # Add comments
         for comment in thread.get("comments", []):
-            thread_content += f"\n👤 [bold]{comment['author']}[/bold]:\n"
+            renderables.append(Text(f"\n👤 {comment['author']}:", style="bold"))
 
             # Check if body contains markdown
             body = comment.get("body", "")
             if "```" in body or "#" in body or "*" in body:
-                # Render as markdown
-                thread_content += str(Markdown(body)) + "\n"
+                # Render as markdown properly
+                renderables.append(Markdown(body))
             else:
-                thread_content += f"{body}\n"
+                renderables.append(Text(body))
 
             if self.verbose and comment.get("created_at"):
-                thread_content += f"[dim]📅 {comment['created_at']}[/dim]\n"
+                renderables.append(Text(f"📅 {comment['created_at']}", style="dim"))
+
+        # Create a group of renderables
+        group = Group(*renderables)
 
         panel = Panel(
-            thread_content.strip(),
+            group,
             border_style="yellow" if thread.get("is_outdated") else "white",
             expand=False,
         )
 
         self.console.print(panel)
+
+    def _get_language_from_path(self, path: str) -> str:
+        """Get syntax highlighting language from file path."""
+        ext_map = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".jsx": "jsx",
+            ".tsx": "tsx",
+            ".java": "java",
+            ".cpp": "cpp",
+            ".c": "c",
+            ".cs": "csharp",
+            ".go": "go",
+            ".rs": "rust",
+            ".rb": "ruby",
+            ".php": "php",
+            ".sh": "bash",
+            ".yml": "yaml",
+            ".yaml": "yaml",
+            ".json": "json",
+            ".xml": "xml",
+            ".html": "html",
+            ".css": "css",
+            ".md": "markdown",
+        }
+
+        for ext, lang in ext_map.items():
+            if path.endswith(ext):
+                return lang
+        return "text"
 
     def display_check_status(self, check_status: Dict[str, Any]) -> None:
         """
@@ -143,29 +188,72 @@ class DisplayManager:
         table.add_column("Conclusion", justify="center")
 
         for check in check_status.get("checks", []):
-            status_icon = "⏳" if check["status"] == "in_progress" else "✓"
-            conclusion_color = "green" if check["conclusion"] == "success" else "red"
-
-            if check["conclusion"]:
-                conclusion = f"[{conclusion_color}]{check['conclusion']}[/{conclusion_color}]"
+            # Determine status icon and color based on status
+            status = check.get("status", "unknown")
+            if status == "in_progress":
+                status_icon = "⏳"
+                status_color = "yellow"
+            elif status == "queued":
+                status_icon = "🔄"
+                status_color = "blue"
+            elif status == "waiting":
+                status_icon = "⏸️"
+                status_color = "magenta"
+            elif status == "completed":
+                status_icon = "✓"
+                status_color = "green"
             else:
-                conclusion = "[yellow]pending[/yellow]"
+                status_icon = "❓"
+                status_color = "grey50"
+
+            # Determine conclusion color
+            conclusion = check.get("conclusion", "")
+            if conclusion == "success":
+                conclusion_color = "green"
+            elif conclusion == "failure":
+                conclusion_color = "red"
+            elif conclusion == "cancelled":
+                conclusion_color = "grey50"
+            elif conclusion == "skipped":
+                conclusion_color = "dim"
+            elif conclusion == "neutral":
+                conclusion_color = "blue"
+            elif conclusion == "timed_out":
+                conclusion_color = "red"
+            elif conclusion == "action_required":
+                conclusion_color = "yellow"
+            else:
+                conclusion_color = "yellow"
+
+            # Format conclusion display
+            if conclusion:
+                conclusion_display = f"[{conclusion_color}]{conclusion}[/{conclusion_color}]"
+            else:
+                conclusion_display = "[yellow]pending[/yellow]"
 
             table.add_row(
-                check["name"],
-                f"{status_icon} {check['status']}",
-                conclusion,
+                check.get("name", "Unknown"),
+                f"[{status_color}]{status_icon} {status}[/{status_color}]",
+                conclusion_display,
             )
 
         self.console.print(table)
 
-        # Summary
-        summary = (
-            f"Total: {check_status['total']} • "
-            f"[green]✓ {check_status['success']}[/green] • "
-            f"[red]✗ {check_status['failure']}[/red] • "
-            f"[yellow]⏳ {check_status['pending']}[/yellow]"
-        )
+        # Enhanced summary
+        summary_parts = [f"Total: {check_status.get('total', 0)}"]
+
+        if check_status.get('success', 0) > 0:
+            summary_parts.append(f"[green]✓ {check_status['success']}[/green]")
+        if check_status.get('failure', 0) > 0:
+            summary_parts.append(f"[red]✗ {check_status['failure']}[/red]")
+        if check_status.get('pending', 0) > 0:
+            summary_parts.append(f"[yellow]⏳ {check_status['pending']}[/yellow]")
+        if check_status.get('skipped', 0) > 0:
+            summary_parts.append(f"[dim]⊘ {check_status['skipped']}[/dim]")
+        if check_status.get('cancelled', 0) > 0:
+            summary_parts.append(f"[grey50]✖ {check_status['cancelled']}[/grey50]")
+
+        summary = " • ".join(summary_parts)
 
         self.console.print(Panel(summary, title="Check Summary", border_style="blue"))
 
