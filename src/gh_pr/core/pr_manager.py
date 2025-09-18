@@ -393,18 +393,33 @@ class PRManager:
             "failure": 0,
             "pending": 0,
             "skipped": 0,
+            "neutral": 0,
+            "cancelled": 0,
+            "timed_out": 0,
+            "action_required": 0,
             "checks": check_runs,
         }
 
         for check in check_runs:
-            if check["conclusion"] == "success":
-                status["success"] += 1
-            elif check["conclusion"] == "failure":
-                status["failure"] += 1
-            elif check["conclusion"] == "skipped":
-                status["skipped"] += 1
-            elif check["status"] == "in_progress" or check["status"] == "queued":
+            # Pending: status is not completed
+            if check.get("status") in ("queued", "in_progress"):
                 status["pending"] += 1
+            elif check.get("status") == "completed":
+                conclusion = check.get("conclusion")
+                if conclusion == "success":
+                    status["success"] += 1
+                elif conclusion == "failure":
+                    status["failure"] += 1
+                elif conclusion == "skipped":
+                    status["skipped"] += 1
+                elif conclusion == "neutral":
+                    status["neutral"] += 1
+                elif conclusion == "cancelled":
+                    status["cancelled"] += 1
+                elif conclusion == "timed_out":
+                    status["timed_out"] += 1
+                elif conclusion == "action_required":
+                    status["action_required"] += 1
 
         return status
 
