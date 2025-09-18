@@ -93,6 +93,105 @@ class CLIConfig:
     "--export", type=click.Choice(["markdown", "csv", "json"]), help="Export output format"
 )
 @click.option("--config", type=click.Path(exists=True), help="Path to config file")
+def main(**kwargs) -> None:
+    """
+    GitHub PR Review Comments Tool
+
+    Fetch review comments from a GitHub PR with various filtering options and automation features.
+
+    When run without arguments:
+    - Automatically finds and uses PR for current branch
+    - If multiple git repos found in subdirs, lets you choose
+    - Falls back to showing helpful message if no PR found
+
+    Examples:
+        gh-pr                        # Auto-detect PR from current/sub directories
+        gh-pr -i                     # Interactive mode - choose from all open PRs
+        gh-pr 53
+        gh-pr https://github.com/owner/repo/pull/53
+        gh-pr --unresolved-outdated  # Auto-detect PR, show likely fixed issues
+        gh-pr --resolve-outdated     # Auto-resolve outdated comments
+        gh-pr --accept-suggestions   # Accept all code suggestions
+        gh-pr --copy                 # Copy output to clipboard
+    """
+    # Create config from kwargs
+    cfg = CLIConfig(**kwargs)
+
+    try:
+        # Initialize services
+        config_manager, cache_manager, token_manager, _ = _initialize_services(
+            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
+        )
+
+        if cfg.clear_cache:
+            return
+
+        # Display token info
+        _display_token_info(token_manager, cfg.verbose)
+
+        # Check automation permissions
+        _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
+
+        # Initialize clients and managers
+        github_client = GitHubClient(token_manager.get_token())
+        pr_manager = PRManager(github_client, cache_manager)
+        display_manager = DisplayManager(console, verbose=cfg.verbose)
+
+        # Determine filter mode
+        filter_mode = _determine_filter_mode(cfg.show_all, cfg.resolved_active, cfg.unresolved_outdated, cfg.current_unresolved)
+
+        # Get PR identifier
+        pr_identifier = _get_pr_identifier(pr_manager, cfg.pr_identifier, cfg.interactive, cfg.repo)
+
+        # Parse PR identifier
+        owner, repo_name, pr_number = pr_manager.parse_pr_identifier(pr_identifier, cfg.repo)
+
+        # Show repository info
+        _show_repo_pr_count(github_client, owner, repo_name, cfg.verbose)
+
+        # Fetch PR data
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(f"Fetching PR #{pr_number}...", total=None)
+            pr_data = pr_manager.fetch_pr_data(owner, repo_name, pr_number)
+            progress.remove_task(task)
+
+        # Handle automation
+        _handle_automation(pr_manager, owner, repo_name, pr_number, cfg.resolve_outdated, cfg.accept_suggestions)
+
+        # Display PR information
+        display_manager.display_pr_header(pr_data)
+
+        # Fetch and display comments
+        comments = pr_manager.fetch_pr_comments(owner, repo_name, pr_number, filter_mode)
+
+        if cfg.checks:
+            check_status = pr_manager.fetch_check_status(owner, repo_name, pr_number)
+            display_manager.display_check_status(check_status)
+
+        display_manager.display_comments(comments, show_code=not cfg.no_code, context_lines=cfg.context)
+
+        # Display summary
+        summary = pr_manager.get_pr_summary(owner, repo_name, pr_number)
+        display_manager.display_summary(summary)
+
+        # Handle output
+        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        if cfg.verbose:
+            console.print_exception()
+        sys.exit(1)
+
+
 def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache: bool, token: Optional[str]):
     """Initialize configuration, cache, and token services."""
     config_manager = ConfigManager(config_path=config_path)
@@ -245,105 +344,6 @@ def _handle_output(
             console.print("[green]✓ Copied to clipboard (plain text)[/green]")
         else:
             console.print("[yellow]⚠ Could not copy to clipboard[/yellow]")
-
-
-def main(**kwargs) -> None:
-    """
-    GitHub PR Review Comments Tool
-
-    Fetch review comments from a GitHub PR with various filtering options and automation features.
-
-    When run without arguments:
-    - Automatically finds and uses PR for current branch
-    - If multiple git repos found in subdirs, lets you choose
-    - Falls back to showing helpful message if no PR found
-
-    Examples:
-        gh-pr                        # Auto-detect PR from current/sub directories
-        gh-pr -i                     # Interactive mode - choose from all open PRs
-        gh-pr 53
-        gh-pr https://github.com/owner/repo/pull/53
-        gh-pr --unresolved-outdated  # Auto-detect PR, show likely fixed issues
-        gh-pr --resolve-outdated     # Auto-resolve outdated comments
-        gh-pr --accept-suggestions   # Accept all code suggestions
-        gh-pr --copy                 # Copy output to clipboard
-    """
-    # Create config from kwargs
-    cfg = CLIConfig(**kwargs)
-
-    try:
-        # Initialize services
-        config_manager, cache_manager, token_manager, _ = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
-
-        if cfg.clear_cache:
-            return
-
-        # Display token info
-        _display_token_info(token_manager, cfg.verbose)
-
-        # Check automation permissions
-        _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
-
-        # Initialize clients and managers
-        github_client = GitHubClient(token_manager.get_token())
-        pr_manager = PRManager(github_client, cache_manager)
-        display_manager = DisplayManager(console, verbose=cfg.verbose)
-
-        # Determine filter mode
-        filter_mode = _determine_filter_mode(cfg.show_all, cfg.resolved_active, cfg.unresolved_outdated, cfg.current_unresolved)
-
-        # Get PR identifier
-        pr_identifier = _get_pr_identifier(pr_manager, cfg.pr_identifier, cfg.interactive, cfg.repo)
-
-        # Parse PR identifier
-        owner, repo_name, pr_number = pr_manager.parse_pr_identifier(pr_identifier, cfg.repo)
-
-        # Show repository info
-        _show_repo_pr_count(github_client, owner, repo_name, cfg.verbose)
-
-        # Fetch PR data
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-            transient=True,
-        ) as progress:
-            task = progress.add_task(f"Fetching PR #{pr_number}...", total=None)
-            pr_data = pr_manager.fetch_pr_data(owner, repo_name, pr_number)
-            progress.remove_task(task)
-
-        # Handle automation
-        _handle_automation(pr_manager, owner, repo_name, pr_number, cfg.resolve_outdated, cfg.accept_suggestions)
-
-        # Display PR information
-        display_manager.display_pr_header(pr_data)
-
-        # Fetch and display comments
-        comments = pr_manager.fetch_pr_comments(owner, repo_name, pr_number, filter_mode)
-
-        if cfg.checks:
-            check_status = pr_manager.fetch_check_status(owner, repo_name, pr_number)
-            display_manager.display_check_status(check_status)
-
-        display_manager.display_comments(comments, show_code=not cfg.no_code, context_lines=cfg.context)
-
-        # Display summary
-        summary = pr_manager.get_pr_summary(owner, repo_name, pr_number)
-        display_manager.display_summary(summary)
-
-        # Handle output
-        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy)
-
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user[/yellow]")
-        sys.exit(130)
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        if cfg.verbose:
-            console.print_exception()
-        sys.exit(1)
 
 
 if __name__ == "__main__":
