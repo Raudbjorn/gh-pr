@@ -160,12 +160,9 @@ custom_filters = [
 
 ## Development Status
 
-### Phase 1: Core Functionality ✅
-- [x] Project setup and structure
-- [x] README with feature planning
-- [ ] Basic PR fetching and display
-- [ ] Comment filtering system
-- [ ] Code context display
+- [x] Basic PR fetching and display
+- [x] Comment filtering system
+- [x] Code context display
 
 ### Phase 2: Token Management 🚧
 - [ ] Token validation and storage
