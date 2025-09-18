@@ -248,11 +248,11 @@ class GitHubClient:
         check_runs = []
 
         # Get the latest commit
-        commits = list(pr.get_commits())
-        if not commits:
+        latest_commit_sha = pr.head.sha
+        if not latest_commit_sha:
             return check_runs
 
-        latest_commit = commits[-1]
+        latest_commit = self.get_repository(owner, repo).get_commit(latest_commit_sha)
 
         # Get check runs for the commit
         for check_run in latest_commit.get_check_runs():
