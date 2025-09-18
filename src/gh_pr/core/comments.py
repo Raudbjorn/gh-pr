@@ -94,7 +94,12 @@ class CommentProcessor:
             if "```suggestion" in body:
                 # Extract suggestion content
                 import re
-                pattern = r"```suggestion\s*\n(.*?)\n```"
+                pattern = r"```suggestion\s*(.*?)(?:\n)?(.*?)\n?```"
+                matches = []
+                for match in re.finditer(r"```suggestion\s*(.*?)(?:\n)?(.*?)\n?```", body, re.DOTALL):
+                    # Combine optional description and suggestion content
+                    suggestion_content = (match.group(1) + match.group(2)).strip()
+                    matches.append(suggestion_content)
                 matches = re.findall(pattern, body, re.DOTALL)
 
                 for match in matches:
