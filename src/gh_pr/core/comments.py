@@ -1,5 +1,6 @@
 """Comment processing and organization."""
 
+import hashlib
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -22,8 +23,15 @@ class CommentProcessor:
         threads = {}
 
         for comment in comments:
-            # Create thread key based on file, line, start_line, and comment id to prevent collisions
-            thread_key = f"{comment['path']}:{comment.get('start_line', comment.get('line', 'general'))}:{comment.get('line', 'general')}:{comment.get('id', 'noid')}"
+            # Create unique thread key using hash to prevent collisions
+            thread_fields = (
+                f"{comment['path']}:"
+                f"{comment.get('start_line', '')}:"
+                f"{comment.get('line', '')}:"
+                f"{comment.get('id', '')}:"
+                f"{comment.get('original_commit_id', '')}"
+            )
+            thread_key = hashlib.sha256(thread_fields.encode()).hexdigest()[:16]
 
             if thread_key not in threads:
                 threads[thread_key] = {
@@ -48,7 +56,7 @@ class CommentProcessor:
                 try:
                     # Try parsing ISO 8601 format, fallback to empty string
                     return datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                except Exception:
+                except (ValueError, AttributeError):
                     return datetime.datetime.max  # Put comments with invalid/missing dates last
 
             thread["comments"].sort(
@@ -78,9 +86,6 @@ class CommentProcessor:
         else:
             return True  # One is missing, mapping is incomplete, consider outdated
 
-        # If position is None, comment is outdated
-        return comment.get("position") is None
-
     def extract_suggestions(
         self, comments: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -102,13 +107,13 @@ class CommentProcessor:
             if "```suggestion" in body:
                 # Extract suggestion content
                 import re
+                # Extract suggestion content
                 pattern = r"```suggestion\s*(.*?)(?:\n)?(.*?)\n?```"
                 matches = []
-                for match in re.finditer(r"```suggestion\s*(.*?)(?:\n)?(.*?)\n?```", body, re.DOTALL):
+                for match in re.finditer(pattern, body, re.DOTALL):
                     # Combine optional description and suggestion content
                     suggestion_content = (match.group(1) + match.group(2)).strip()
                     matches.append(suggestion_content)
-                matches = re.findall(pattern, body, re.DOTALL)
 
                 suggestions.extend([
                     {

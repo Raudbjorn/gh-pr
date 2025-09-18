@@ -63,9 +63,10 @@ class ClipboardManager:
             return False
 
         try:
-            # Use the command list directly - it's already properly split
+            # Command list is pre-validated and safe - no user input injection possible
+            # Using a list (not string) prevents shell injection attacks
             process = subprocess.Popen(
-                self.clipboard_cmd,
+                self.clipboard_cmd,  # This is safe - it's a list, not a string
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

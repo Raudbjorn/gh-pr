@@ -532,9 +532,14 @@ class PRManager:
 
         Returns:
             Number of comments resolved
+
+        Raises:
+            NotImplementedError: This feature is not yet implemented
         """
-        # This would require GraphQL API or specific REST endpoints
-        raise NotImplementedError("resolve_all_outdated_unresolved_comments is not yet implemented.")
+        raise NotImplementedError(
+            "Resolving outdated comments requires GraphQL API implementation. "
+            "This feature is not yet implemented."
+        )
 
     def accept_all_suggestions(
         self, owner: str, repo: str, pr_number: int
@@ -549,7 +554,11 @@ class PRManager:
 
         Returns:
             Number of suggestions accepted
+
+        Raises:
+            NotImplementedError: This feature is not yet implemented
         """
-        # This would require specific API endpoints
-        # For now, return 0 as placeholder
-        return 0
+        raise NotImplementedError(
+            "Accepting suggestions requires specific API endpoints. "
+            "This feature is not yet implemented."
+        )

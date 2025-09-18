@@ -3,6 +3,7 @@
 
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +21,29 @@ from .utils.clipboard import ClipboardManager
 from .utils.config import ConfigManager
 
 console = Console()
+
+@dataclass
+class CLIConfig:
+    """Configuration for CLI command."""
+    pr_identifier: Optional[str] = None
+    interactive: bool = False
+    repo: Optional[str] = None
+    token: Optional[str] = None
+    show_all: bool = False
+    resolved_active: bool = False
+    unresolved_outdated: bool = False
+    current_unresolved: bool = False
+    checks: bool = False
+    verbose: bool = False
+    context: int = 3
+    no_code: bool = False
+    no_cache: bool = False
+    clear_cache: bool = False
+    resolve_outdated: bool = False
+    accept_suggestions: bool = False
+    copy: bool = False
+    export: Optional[str] = None
+    config: Optional[str] = None
 
 
 @click.command()
@@ -52,7 +76,10 @@ console = Console()
     "-v", "--verbose", is_flag=True, help="Show additional details (timestamps, resolved status)"
 )
 @click.option(
-    "-c", "--context", default=3, help="Number of context lines to show (default: 3)", type=int
+    "-c", "--context",
+    default=3,
+    help="Number of context lines to show (default: 3)",
+    type=click.IntRange(0, 50)  # Prevent negative or huge values
 )
 @click.option("--no-code", is_flag=True, help="Don't show code context")
 @click.option("--no-cache", is_flag=True, help="Bypass cache and fetch fresh data")
@@ -182,12 +209,18 @@ def _handle_automation(
 ):
     """Handle automation commands."""
     if resolve_outdated:
-        resolved_count = pr_manager.resolve_outdated_comments(owner, repo_name, pr_number)
-        console.print(f"[green]✓ Resolved {resolved_count} outdated comments[/green]")
+        try:
+            resolved_count = pr_manager.resolve_outdated_comments(owner, repo_name, pr_number)
+            console.print(f"[green]✓ Resolved {resolved_count} outdated comments[/green]")
+        except NotImplementedError as e:
+            console.print(f"[yellow]⚠ {str(e)}[/yellow]")
 
     if accept_suggestions:
-        accepted_count = pr_manager.accept_all_suggestions(owner, repo_name, pr_number)
-        console.print(f"[green]✓ Accepted {accepted_count} suggestions[/green]")
+        try:
+            accepted_count = pr_manager.accept_all_suggestions(owner, repo_name, pr_number)
+            console.print(f"[green]✓ Accepted {accepted_count} suggestions[/green]")
+        except NotImplementedError as e:
+            console.print(f"[yellow]⚠ {str(e)}[/yellow]")
 
 
 def _handle_output(
@@ -214,27 +247,7 @@ def _handle_output(
             console.print("[yellow]⚠ Could not copy to clipboard[/yellow]")
 
 
-def main(
-    pr_identifier: Optional[str],
-    interactive: bool,
-    repo: Optional[str],
-    token: Optional[str],
-    show_all: bool,
-    resolved_active: bool,
-    unresolved_outdated: bool,
-    current_unresolved: bool,
-    checks: bool,
-    verbose: bool,
-    context: int,
-    no_code: bool,
-    no_cache: bool,
-    clear_cache: bool,
-    resolve_outdated: bool,
-    accept_suggestions: bool,
-    copy: bool,
-    export: Optional[str],
-    config: Optional[str],
-) -> None:
+def main(**kwargs) -> None:
     """
     GitHub PR Review Comments Tool
 
@@ -255,37 +268,40 @@ def main(
         gh-pr --accept-suggestions   # Accept all code suggestions
         gh-pr --copy                 # Copy output to clipboard
     """
+    # Create config from kwargs
+    cfg = CLIConfig(**kwargs)
+
     try:
         # Initialize services
         config_manager, cache_manager, token_manager, _ = _initialize_services(
-            config, no_cache, clear_cache, token
+            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
         )
 
-        if clear_cache:
+        if cfg.clear_cache:
             return
 
         # Display token info
-        _display_token_info(token_manager, verbose)
+        _display_token_info(token_manager, cfg.verbose)
 
         # Check automation permissions
-        _check_automation_permissions(token_manager, resolve_outdated, accept_suggestions)
+        _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
 
         # Initialize clients and managers
         github_client = GitHubClient(token_manager.get_token())
         pr_manager = PRManager(github_client, cache_manager)
-        display_manager = DisplayManager(console, verbose=verbose)
+        display_manager = DisplayManager(console, verbose=cfg.verbose)
 
         # Determine filter mode
-        filter_mode = _determine_filter_mode(show_all, resolved_active, unresolved_outdated, current_unresolved)
+        filter_mode = _determine_filter_mode(cfg.show_all, cfg.resolved_active, cfg.unresolved_outdated, cfg.current_unresolved)
 
         # Get PR identifier
-        pr_identifier = _get_pr_identifier(pr_manager, pr_identifier, interactive, repo)
+        pr_identifier = _get_pr_identifier(pr_manager, cfg.pr_identifier, cfg.interactive, cfg.repo)
 
         # Parse PR identifier
-        owner, repo_name, pr_number = pr_manager.parse_pr_identifier(pr_identifier, repo)
+        owner, repo_name, pr_number = pr_manager.parse_pr_identifier(pr_identifier, cfg.repo)
 
         # Show repository info
-        _show_repo_pr_count(github_client, owner, repo_name, verbose)
+        _show_repo_pr_count(github_client, owner, repo_name, cfg.verbose)
 
         # Fetch PR data
         with Progress(
@@ -299,7 +315,7 @@ def main(
             progress.remove_task(task)
 
         # Handle automation
-        _handle_automation(pr_manager, owner, repo_name, pr_number, resolve_outdated, accept_suggestions)
+        _handle_automation(pr_manager, owner, repo_name, pr_number, cfg.resolve_outdated, cfg.accept_suggestions)
 
         # Display PR information
         display_manager.display_pr_header(pr_data)
@@ -307,25 +323,25 @@ def main(
         # Fetch and display comments
         comments = pr_manager.fetch_pr_comments(owner, repo_name, pr_number, filter_mode)
 
-        if checks:
+        if cfg.checks:
             check_status = pr_manager.fetch_check_status(owner, repo_name, pr_number)
             display_manager.display_check_status(check_status)
 
-        display_manager.display_comments(comments, show_code=not no_code, context_lines=context)
+        display_manager.display_comments(comments, show_code=not cfg.no_code, context_lines=cfg.context)
 
         # Display summary
         summary = pr_manager.get_pr_summary(owner, repo_name, pr_number)
         display_manager.display_summary(summary)
 
         # Handle output
-        _handle_output(display_manager, pr_data, comments, summary, export, copy)
+        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
         sys.exit(130)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        if verbose:
+        if cfg.verbose:
             console.print_exception()
         sys.exit(1)
 

@@ -12,6 +12,11 @@ from github.Auth import Token as GithubToken
 
 logger = logging.getLogger(__name__)
 
+# Constants
+SUBPROCESS_TIMEOUT = 5  # seconds
+GH_CLI_AUTH_STATUS_CMD = ["gh", "auth", "status", "--show-token"]
+GH_CLI_AUTH_TOKEN_CMD = ["gh", "auth", "token"]
+
 
 class TokenManager:
     """Manages GitHub authentication tokens."""
@@ -72,10 +77,10 @@ class TokenManager:
         try:
             # Try to get auth status from gh CLI
             result = subprocess.run(
-                ["gh", "auth", "status", "--show-token"],
+                GH_CLI_AUTH_STATUS_CMD,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=SUBPROCESS_TIMEOUT
             )
 
             # Parse token from output
@@ -85,10 +90,10 @@ class TokenManager:
 
             # Alternative: try to get token from gh config
             result = subprocess.run(
-                ["gh", "auth", "token"],
+                GH_CLI_AUTH_TOKEN_CMD,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=SUBPROCESS_TIMEOUT
             )
 
             if result.returncode == 0 and result.stdout.strip():
