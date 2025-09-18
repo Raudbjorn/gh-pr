@@ -148,7 +148,7 @@ class PRManager:
 
     def _get_current_branch_pr(self) -> Optional[str]:
         """
-        Get PR for current git branch using gh CLI.
+        Get PR for current git branch using GitHub API.
 
         Returns:
             PR identifier or None
@@ -162,23 +162,39 @@ class PRManager:
                 timeout=5
             )
 
-            # Try to get PR info using gh CLI
+            # Get current branch name
             result = subprocess.run(
-                ["gh", "pr", "view", "--json", "number"],
+                ["git", "branch", "--show-current"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
 
-            if result.returncode == 0:
-                import json
-                data = json.loads(result.stdout)
-                if "number" in data:
-                    repo_info = self._get_current_repo_info()
-                    if repo_info:
-                        return f"{repo_info[0]}/{repo_info[1]}#{data['number']}"
+            if result.returncode != 0:
+                return None
 
-        except (subprocess.SubprocessError, FileNotFoundError, Exception):
+            branch_name = result.stdout.strip()
+            if not branch_name:
+                return None
+
+            # Get repository info
+            repo_info = self._get_current_repo_info()
+            if not repo_info:
+                return None
+
+            owner, repo = repo_info
+
+            # Use GitHub API to find PR for this branch
+            try:
+                # List PRs and find one matching our branch
+                prs = self.github.get_open_prs(owner, repo, limit=100)
+                for pr in prs:
+                    if pr.get('head_ref') == branch_name:
+                        return f"{owner}/{repo}#{pr['number']}"
+            except Exception:
+                pass
+
+        except (subprocess.SubprocessError, FileNotFoundError):
             pass
 
         return None
@@ -214,39 +230,53 @@ class PRManager:
             PR info dictionary or None
         """
         try:
-            # Change to directory and get PR info
             original_cwd = os.getcwd()
             os.chdir(directory)
 
+            # Get current branch
             result = subprocess.run(
-                ["gh", "pr", "view", "--json", "number,title,headRefName"],
+                ["git", "branch", "--show-current"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
 
+            if result.returncode != 0:
+                os.chdir(original_cwd)
+                return None
+
+            branch_name = result.stdout.strip()
+            if not branch_name:
+                os.chdir(original_cwd)
+                return None
+
+            # Get repo info
+            repo_info = self._get_current_repo_info()
             os.chdir(original_cwd)
 
-            if result.returncode == 0:
-                import json
-                data = json.loads(result.stdout)
+            if not repo_info:
+                return None
 
-                # Get repo info
-                os.chdir(directory)
-                repo_info = self._get_current_repo_info()
-                os.chdir(original_cwd)
+            owner, repo = repo_info
 
-                if repo_info and "number" in data:
-                    return {
-                        "identifier": f"{repo_info[0]}/{repo_info[1]}#{data['number']}",
-                        "number": data["number"],
-                        "title": data.get("title", ""),
-                        "branch": data.get("headRefName", ""),
-                        "directory": str(directory),
-                    }
+            # Use GitHub API to find PR for this branch
+            try:
+                prs = self.github.get_open_prs(owner, repo, limit=100)
+                for pr in prs:
+                    if pr.get('head_ref') == branch_name:
+                        return {
+                            "identifier": f"{owner}/{repo}#{pr['number']}",
+                            "number": pr["number"],
+                            "title": pr.get("title", ""),
+                            "branch": branch_name,
+                            "directory": str(directory),
+                        }
+            except Exception:
+                pass
 
         except Exception:
-            pass
+            if 'original_cwd' in locals():
+                os.chdir(original_cwd)
 
         return None
 

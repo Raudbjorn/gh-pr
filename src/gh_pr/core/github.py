@@ -102,6 +102,7 @@ class GitHubClient:
                 "title": pr.title,
                 "author": pr.user.login,
                 "branch": pr.head.ref,
+                "head_ref": pr.head.ref,  # Add head_ref for consistency
                 "created_at": pr.created_at.isoformat() if pr.created_at else None,
                 "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
                 "draft": pr.draft,
