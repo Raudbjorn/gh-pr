@@ -94,7 +94,9 @@ class GitHubClient:
         repository = self.get_repository(owner, repo)
         prs = []
 
-        for pr in repository.get_pulls(state="open")[:limit]:
+        for pr in repository.get_pulls(state="open"):
+            if len(prs) >= limit:
+                break
             prs.append({
                 "number": pr.number,
                 "title": pr.title,
