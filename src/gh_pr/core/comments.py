@@ -38,10 +38,20 @@ class CommentProcessor:
 
             threads[thread_key]["comments"].append(comment)
 
+        import datetime
+
         # Sort comments within threads by creation time
         for thread in threads.values():
+            def parse_created_at(comment):
+                created_at = comment.get("created_at", "")
+                try:
+                    # Try parsing ISO 8601 format, fallback to empty string
+                    return datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                except Exception:
+                    return datetime.datetime.max  # Put comments with invalid/missing dates last
+
             thread["comments"].sort(
-                key=lambda c: c.get("created_at", ""),
+                key=parse_created_at,
             )
 
         return list(threads.values())
