@@ -79,10 +79,10 @@ class PermissionChecker:
                 result["has_permissions"] = ["admin", "write", "read"]
                 result["allowed"] = True
                 result["reason"] = "Admin access to repository"
-            elif permissions == "write" or permissions == "maintain":
+            elif permissions in {"write", "maintain"}:
                 result["has_permissions"] = ["write", "read"]
                 # Check if operation requires admin
-                if operation in ["dismiss_review"]:
+                if operation in {"dismiss_review"}:
                     result["allowed"] = False
                     result["reason"] = "Operation requires admin access"
                     result["missing_permissions"] = ["admin"]
@@ -159,7 +159,7 @@ class PermissionChecker:
             try:
                 perm_level = repository.get_collaborator_permission(user.login)
 
-                if perm_level in ["admin", "write", "maintain"]:
+                if perm_level in {"admin", "write", "maintain"}:
                     permissions["can_comment"] = True
                     permissions["can_review"] = True
                     permissions["can_approve"] = not permissions["is_author"]
@@ -171,7 +171,7 @@ class PermissionChecker:
                     # Check merge permissions
                     if perm_level == "admin":
                         permissions["can_merge"] = True
-                    elif perm_level in ["write", "maintain"]:
+                    elif perm_level in {"write", "maintain"}:
                         # Check branch protection rules
                         try:
                             branch = repository.get_branch(pr.base.ref)
@@ -185,7 +185,7 @@ class PermissionChecker:
                             else:
                                 permissions["can_merge"] = True
                         except GithubException:
-                            permissions["can_merge"] = perm_level in ["write", "maintain"]
+                            permissions["can_merge"] = perm_level in {"write", "maintain"}
                 elif perm_level == "read":
                     permissions["can_comment"] = True
                     permissions["can_review"] = False

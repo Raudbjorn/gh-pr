@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -12,6 +13,8 @@ from .github import GitHubClient
 from .comments import CommentProcessor
 from .filters import CommentFilter
 from ..utils.cache import CacheManager
+
+logger = logging.getLogger(__name__)
 
 
 class PRManager:
@@ -191,10 +194,12 @@ class PRManager:
                 for pr in prs:
                     if pr.get('head_ref') == branch_name:
                         return f"{owner}/{repo}#{pr['number']}"
-            except Exception:
+            except (GithubException, KeyError, ValueError) as e:
+                logger.debug(f"Failed to get PR for branch {branch_name}: {e}")
                 pass
 
-        except (subprocess.SubprocessError, FileNotFoundError):
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.debug(f"Failed to detect current branch PR: {e}")
             pass
 
         return None
@@ -271,10 +276,12 @@ class PRManager:
                             "branch": branch_name,
                             "directory": str(directory),
                         }
-            except Exception:
+            except (GithubException, KeyError, ValueError) as e:
+                logger.debug(f"Failed to get PR for branch in {directory}: {e}")
                 pass
 
-        except Exception:
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+            logger.error(f"Unexpected error in _get_pr_from_directory: {e}", exc_info=True)
             if 'original_cwd' in locals():
                 os.chdir(original_cwd)
 

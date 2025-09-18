@@ -110,15 +110,17 @@ class CommentProcessor:
                     matches.append(suggestion_content)
                 matches = re.findall(pattern, body, re.DOTALL)
 
-                for match in matches:
-                    suggestions.append({
+                suggestions.extend([
+                    {
                         "comment_id": comment["id"],
                         "author": comment["author"],
                         "path": comment["path"],
                         "line": comment.get("line"),
                         "suggestion": match.strip(),
                         "original_code": self._extract_original_code(comment),
-                    })
+                    }
+                    for match in matches
+                ])
 
         return suggestions
 

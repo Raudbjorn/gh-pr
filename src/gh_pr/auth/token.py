@@ -1,11 +1,16 @@
 """GitHub token management and validation."""
 
 import os
+import subprocess
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Any
 
 from github import Github, GithubException
 from github.Auth import Token as GithubToken
+
+logger = logging.getLogger(__name__)
 
 
 class TokenManager:
@@ -64,9 +69,6 @@ class TokenManager:
         Returns:
             Token string if found, None otherwise
         """
-        import subprocess
-        import json
-
         try:
             # Try to get auth status from gh CLI
             result = subprocess.run(
@@ -166,12 +168,17 @@ class TokenManager:
             try:
                 # This will work for classic PATs
                 user = github.get_user()
+                # WARNING: Accessing private attributes of PyGithub (_Github__requester)
+                # This is fragile and may break with library updates.
+                # Used as a workaround for the lack of a public API to get token scopes.
+                # TODO: Consider making a lightweight API request to extract headers instead.
                 if hasattr(github, '_Github__requester'):
                     headers = github._Github__requester._Requester__headers
                     if 'x-oauth-scopes' in headers:
                         scopes = headers['x-oauth-scopes']
                         info["scopes"] = [s.strip() for s in scopes.split(',') if s.strip()]
-            except:
+            except Exception as e:
+                logger.debug(f"Failed to extract token scopes: {e}")
                 pass
 
             # Check token expiration for fine-grained tokens
@@ -182,13 +189,14 @@ class TokenManager:
                     # This is a placeholder - GitHub API doesn't directly expose token expiry
                     # In real implementation, you might store this when token is created
                     pass
-                except:
+                except Exception:
                     pass
 
             self._token_info = info
             return info
 
-        except Exception:
+        except (GithubException, ValueError, KeyError) as e:
+            logger.debug(f"Failed to get token info: {e}")
             return None
 
     def has_permissions(self, required_scopes: List[str]) -> bool:

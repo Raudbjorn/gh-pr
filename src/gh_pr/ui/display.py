@@ -78,8 +78,8 @@ class DisplayManager:
 
         Args:
             thread: Thread dictionary
-            show_code: Whether to show code context
-            context_lines: Number of context lines
+            show_code: Whether to show code context (uses GitHub's diff_hunk)
+            context_lines: Number of context lines (not used - GitHub provides its own context in diff_hunk)
         """
         # Build thread status
         status_parts = []

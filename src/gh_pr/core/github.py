@@ -127,18 +127,16 @@ class GitHubClient:
             List of review dictionaries
         """
         pr = self.get_pull_request(owner, repo, pr_number)
-        reviews = []
-
-        for review in pr.get_reviews():
-            reviews.append({
+        return [
+            {
                 "id": review.id,
                 "author": review.user.login if review.user else "Unknown",
                 "state": review.state,
                 "body": review.body,
                 "submitted_at": review.submitted_at.isoformat() if review.submitted_at else None,
-            })
-
-        return reviews
+            }
+            for review in pr.get_reviews()
+        ]
 
     def get_pr_review_comments(
         self, owner: str, repo: str, pr_number: int
@@ -155,10 +153,8 @@ class GitHubClient:
             List of review comment dictionaries
         """
         pr = self.get_pull_request(owner, repo, pr_number)
-        comments = []
-
-        for comment in pr.get_review_comments():
-            comments.append({
+        return [
+            {
                 "id": comment.id,
                 "author": comment.user.login if comment.user else "Unknown",
                 "body": comment.body,
@@ -172,9 +168,9 @@ class GitHubClient:
                 "diff_hunk": comment.diff_hunk,
                 "position": comment.position,
                 "original_position": comment.original_position,
-            })
-
-        return comments
+            }
+            for comment in pr.get_review_comments()
+        ]
 
     def get_pr_issue_comments(
         self, owner: str, repo: str, pr_number: int
@@ -191,18 +187,16 @@ class GitHubClient:
             List of issue comment dictionaries
         """
         pr = self.get_pull_request(owner, repo, pr_number)
-        comments = []
-
-        for comment in pr.get_issue_comments():
-            comments.append({
+        return [
+            {
                 "id": comment.id,
                 "author": comment.user.login if comment.user else "Unknown",
                 "body": comment.body,
                 "created_at": comment.created_at.isoformat() if comment.created_at else None,
                 "updated_at": comment.updated_at.isoformat() if comment.updated_at else None,
-            })
-
-        return comments
+            }
+            for comment in pr.get_issue_comments()
+        ]
 
     def get_pr_files(
         self, owner: str, repo: str, pr_number: int
@@ -219,19 +213,17 @@ class GitHubClient:
             List of file dictionaries
         """
         pr = self.get_pull_request(owner, repo, pr_number)
-        files = []
-
-        for file in pr.get_files():
-            files.append({
+        return [
+            {
                 "filename": file.filename,
                 "status": file.status,
                 "additions": file.additions,
                 "deletions": file.deletions,
                 "changes": file.changes,
                 "patch": file.patch if hasattr(file, 'patch') else None,
-            })
-
-        return files
+            }
+            for file in pr.get_files()
+        ]
 
     def get_check_runs(
         self, owner: str, repo: str, pr_number: int
