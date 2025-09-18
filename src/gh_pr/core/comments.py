@@ -22,8 +22,8 @@ class CommentProcessor:
         threads = {}
 
         for comment in comments:
-            # Create thread key based on file and line
-            thread_key = f"{comment['path']}:{comment.get('line', 'general')}"
+            # Create thread key based on file, line, start_line, and comment id to prevent collisions
+            thread_key = f"{comment['path']}:{comment.get('start_line', comment.get('line', 'general'))}:{comment.get('line', 'general')}:{comment.get('id', 'noid')}"
 
             if thread_key not in threads:
                 threads[thread_key] = {
