@@ -66,9 +66,16 @@ class CommentProcessor:
         Returns:
             True if comment is outdated
         """
-        # Check if position differs from original position
-        if comment.get("position") and comment.get("original_position"):
-            return comment["position"] != comment["original_position"]
+        # Check if position or original_position are missing or differ
+        position = comment.get("position")
+        original_position = comment.get("original_position")
+
+        if position is not None and original_position is not None:
+            return position != original_position
+        elif position is None and original_position is None:
+            return False  # Cannot determine, assume not outdated
+        else:
+            return True  # One is missing, mapping is incomplete, consider outdated
 
         # If position is None, comment is outdated
         return comment.get("position") is None
