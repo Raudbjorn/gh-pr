@@ -494,8 +494,7 @@ class PRManager:
             Number of comments resolved
         """
         # This would require GraphQL API or specific REST endpoints
-        # For now, return 0 as placeholder
-        return 0
+        raise NotImplementedError("resolve_all_outdated_unresolved_comments is not yet implemented.")
 
     def accept_all_suggestions(
         self, owner: str, repo: str, pr_number: int
