@@ -28,7 +28,6 @@ class CommentProcessor:
                 f"{comment['path']}:"
                 f"{comment.get('start_line', '')}:"
                 f"{comment.get('line', '')}:"
-                f"{comment.get('id', '')}:"
                 f"{comment.get('original_commit_id', '')}"
             )
             thread_key = hashlib.sha256(thread_fields.encode()).hexdigest()[:16]
