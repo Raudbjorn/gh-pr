@@ -44,13 +44,13 @@ class CacheManager:
                     stat = os.statvfs(str(self.location))
                     free_bytes = stat.f_bavail * stat.f_frsize
                     if free_bytes < 10 * 1024 * 1024:
-                        logger.warning(f"Insufficient disk space at cache location '{self.location}'. "
-                                     f"Required: 10MB, Available: {free_bytes // (1024 * 1024)}MB. Disabling cache.")
+                        logger.warning(f"Insufficient disk space at cache location '{self.location}'. Required: 10MB, Available: {free_bytes // (1024 * 1024)}MB. Disabling cache.")
                         self.enabled = False
                         return
                 except (OSError, AttributeError):
-                    # statvfs not available on all systems
+                    # statvfs might not be available on all platforms (e.g., Windows)
                     pass
+
 
                 self.cache = diskcache.Cache(str(self.location))
             except (OSError, PermissionError) as e:

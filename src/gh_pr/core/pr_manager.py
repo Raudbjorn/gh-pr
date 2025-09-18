@@ -63,10 +63,9 @@ class PRManager:
 
         # Match just PR number
         if identifier.isdigit():
-            if default_repo:
-                if "/" in default_repo:
-                    owner, repo = default_repo.split("/", 1)
-                    return owner, repo, int(identifier)
+            if default_repo and "/" in default_repo:
+                owner, repo = default_repo.split("/", 1)
+                return owner, repo, int(identifier)
 
             # Try to get from current git repo
             repo_info = self._get_current_repo_info()
@@ -234,8 +233,8 @@ class PRManager:
         Returns:
             PR info dictionary or None
         """
+        original_cwd = os.getcwd()
         try:
-            original_cwd = os.getcwd()
             os.chdir(directory)
 
             # Get current branch
@@ -247,17 +246,14 @@ class PRManager:
             )
 
             if result.returncode != 0:
-                os.chdir(original_cwd)
                 return None
 
             branch_name = result.stdout.strip()
             if not branch_name:
-                os.chdir(original_cwd)
                 return None
 
             # Get repo info
             repo_info = self._get_current_repo_info()
-            os.chdir(original_cwd)
 
             if not repo_info:
                 return None
@@ -278,12 +274,11 @@ class PRManager:
                         }
             except (GithubException, KeyError, ValueError) as e:
                 logger.debug(f"Failed to get PR for branch in {directory}: {e}")
-                pass
 
         except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
             logger.error(f"Unexpected error in _get_pr_from_directory: {e}", exc_info=True)
-            if 'original_cwd' in locals():
-                os.chdir(original_cwd)
+        finally:
+            os.chdir(original_cwd)
 
         return None
 
