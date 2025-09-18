@@ -243,7 +243,7 @@ class TokenManager:
                 if scope == "repo":
                     # Try to list repos
                     user = github.get_user()
-                    list(user.get_repos(type="all")[:1])
+                    user.get_repos(type="all")[0]
                 elif scope == "write:discussion":
                     # This is harder to test without a specific repo
                     pass
