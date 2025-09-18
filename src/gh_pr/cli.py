@@ -143,8 +143,13 @@ def main(
 
         # Check permissions for automation commands
         if resolve_outdated or accept_suggestions:
-            required_scopes = ["repo", "write:discussion"] if resolve_outdated else ["repo"]
-            if not token_manager.has_permissions(required_scopes):
+            required_scopes = set()
+            if resolve_outdated:
+                required_scopes.update(["repo", "write:discussion"])
+            if accept_suggestions:
+                required_scopes.update(["repo"])
+
+            if not token_manager.has_permissions(list(required_scopes)):
                 console.print(
                     f"[yellow]⚠ Warning: Token lacks required permissions: {', '.join(required_scopes)}[/yellow]"
                 )
