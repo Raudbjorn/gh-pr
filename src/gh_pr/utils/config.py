@@ -151,10 +151,8 @@ class ConfigManager:
         Returns:
             True if successful
         """
-        save_path = Path(path) if path else self.config_path
+        save_path = (Path(path) if path else self.config_path) or Path.home() / ".config" / "gh-pr" / "config.toml"
 
-        if not save_path:
-            save_path = Path.home() / ".config" / "gh-pr" / "config.toml"
 
         try:
             save_path.parent.mkdir(parents=True, exist_ok=True)
