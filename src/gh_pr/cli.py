@@ -119,12 +119,12 @@ def main(**kwargs) -> None:
 
     try:
         # Initialize services
-        config_manager, cache_manager, token_manager, _ = _initialize_services(
+        result = _initialize_services(
             cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
         )
-
-        if cfg.clear_cache:
-            return
+        if result is None:
+            return  # Cache was cleared
+        config_manager, cache_manager, token_manager = result
 
         # Display token info
         _display_token_info(token_manager, cfg.verbose)
@@ -204,7 +204,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
     if clear_cache:
         cache_manager.clear()
         console.print("[green]✓ Cache cleared successfully[/green]")
-        return None, None, None, None
+        return None, None, None
 
     token_manager = TokenManager(token=token)
 
@@ -212,7 +212,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
         console.print("[red]✗ Invalid or expired GitHub token[/red]")
         sys.exit(1)
 
-    return config_manager, cache_manager, token_manager, None
+    return config_manager, cache_manager, token_manager
 
 
 def _display_token_info(token_manager: TokenManager, verbose: bool):

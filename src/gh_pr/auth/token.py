@@ -76,8 +76,9 @@ class TokenManager:
         """
         try:
             # Try to get auth status from gh CLI
+            # Security: GH_CLI_AUTH_STATUS_CMD is a hardcoded constant list, not user input
             result = subprocess.run(
-                GH_CLI_AUTH_STATUS_CMD,
+                GH_CLI_AUTH_STATUS_CMD,  # Static constant: ["gh", "auth", "status", "--show-token"]
                 capture_output=True,
                 text=True,
                 timeout=SUBPROCESS_TIMEOUT
@@ -89,8 +90,9 @@ class TokenManager:
                     return line.split("Token:")[-1].strip()
 
             # Alternative: try to get token from gh config
+            # Security: GH_CLI_AUTH_TOKEN_CMD is a hardcoded constant list, not user input
             result = subprocess.run(
-                GH_CLI_AUTH_TOKEN_CMD,
+                GH_CLI_AUTH_TOKEN_CMD,  # Static constant: ["gh", "auth", "token"]
                 capture_output=True,
                 text=True,
                 timeout=SUBPROCESS_TIMEOUT
@@ -170,21 +172,10 @@ class TokenManager:
             }
 
             # Try to get scopes (only for OAuth/PAT tokens)
-            try:
-                # This will work for classic PATs
-                user = github.get_user()
-                # WARNING: Accessing private attributes of PyGithub (_Github__requester)
-                # This is fragile and may break with library updates.
-                # Used as a workaround for the lack of a public API to get token scopes.
-                # TODO: Consider making a lightweight API request to extract headers instead.
-                if hasattr(github, '_Github__requester'):
-                    headers = github._Github__requester._Requester__headers
-                    if 'x-oauth-scopes' in headers:
-                        scopes = headers['x-oauth-scopes']
-                        info["scopes"] = [s.strip() for s in scopes.split(',') if s.strip()]
-            except Exception as e:
-                logger.debug(f"Failed to extract token scopes: {e}")
-                pass
+            # Note: PyGithub doesn't provide a public API for token scopes.
+            # For now, we'll skip scope detection to avoid accessing private attributes.
+            # Future improvement: Make a direct API request to get scope information.
+            info["scopes"] = []  # Unable to determine scopes without private attribute access
 
             # Check token expiration for fine-grained tokens
             if token_type == "Fine-grained Personal Access Token":

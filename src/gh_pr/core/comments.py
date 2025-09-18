@@ -1,8 +1,8 @@
 """Comment processing and organization."""
 
+import datetime
 import hashlib
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 
 
 class CommentProcessor:
@@ -46,8 +46,6 @@ class CommentProcessor:
                 }
 
             threads[thread_key]["comments"].append(comment)
-
-        import datetime
 
         # Sort comments within threads by creation time
         for thread in threads.values():
