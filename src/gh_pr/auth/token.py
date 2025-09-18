@@ -49,9 +49,7 @@ class TokenManager:
             if env_token := os.environ.get(env_var):
                 return env_token
 
-        # Try to get from gh CLI config
-        gh_token = self._get_gh_cli_token()
-        if gh_token:
+        if gh_token := self._get_gh_cli_token():
             return gh_token
 
         raise ValueError(
