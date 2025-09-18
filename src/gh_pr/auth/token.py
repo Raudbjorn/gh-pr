@@ -240,12 +240,50 @@ class TokenManager:
                 "read:org": ["organization"],
             }
 
-            # Test permissions by trying relevant API calls
+            # Test permissions by trying relevant API calls for each mapped permission
+            user = github.get_user()
             for scope in required_scopes:
-                if scope == "repo":
-                    # Try to list repos
-                    user = github.get_user()
-                    user.get_repos(type="all")[0]
+                mapped_permissions = permission_map.get(scope, [])
+                for perm in mapped_permissions:
+                    if perm == "contents":
+                        # Try to list repos (contents access)
+                        try:
+                            user.get_repos(type="all")[0]
+                        except Exception:
+                            return False
+                    elif perm == "pull_requests":
+                        # Try to list pull requests for a repo
+                        try:
+                            repos = user.get_repos(type="all")
+                            if repos.totalCount > 0:
+                                repo = repos[0]
+                                repo.get_pulls()[0]
+                        except Exception:
+                            return False
+                    elif perm == "issues":
+                        # Try to list issues for a repo
+                        try:
+                            repos = user.get_repos(type="all")
+                            if repos.totalCount > 0:
+                                repo = repos[0]
+                                repo.get_issues()[0]
+                        except Exception:
+                            return False
+                    elif perm == "discussions":
+                        # Try to list discussions for a repo
+                        try:
+                            repos = user.get_repos(type="all")
+                            if repos.totalCount > 0:
+                                repo = repos[0]
+                                repo.get_discussions()[0]
+                        except Exception:
+                            return False
+                    elif perm == "organization":
+                        # Try to get organizations
+                        try:
+                            user.get_orgs()[0]
+                        except Exception:
+                            return False
             return True
 
         except GithubException:
