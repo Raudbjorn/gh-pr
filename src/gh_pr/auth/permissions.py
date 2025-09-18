@@ -69,7 +69,6 @@ class PermissionChecker:
 
             # Check if user has push access (indicates write permissions)
             user = self.github.get_user()
-            has_push_access = repository.has_in_collaborators(user.login)
 
             # Check repository permissions
             permissions = repository.get_collaborator_permission(user.login)
