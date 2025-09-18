@@ -146,7 +146,7 @@ class PermissionChecker:
                 permissions["is_collaborator"] = repository.has_in_collaborators(
                     user.login
                 )
-            except:
+            except GithubException:
                 pass
 
             # Check if user is a reviewer
