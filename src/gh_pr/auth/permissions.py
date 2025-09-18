@@ -212,8 +212,8 @@ class PermissionChecker:
         Returns:
             Dictionary mapping operations to required permissions
         """
-        summary = {}
-        for operation in operations:
-            if operation in self.OPERATION_PERMISSIONS:
-                summary[operation] = self.OPERATION_PERMISSIONS[operation]
-        return summary
+        return {
+            operation: self.OPERATION_PERMISSIONS[operation]
+            for operation in operations
+            if operation in self.OPERATION_PERMISSIONS
+        }
