@@ -105,11 +105,11 @@ class CommentProcessor:
                 # Extract suggestion content
                 import re
                 # Extract suggestion content
-                pattern = r"```suggestion\s*(.*?)(?:\n)?(.*?)\n?```"
+                pattern = r"```suggestion\n(.*?)\n```"
                 matches = []
                 for match in re.finditer(pattern, body, re.DOTALL):
-                    # Combine optional description and suggestion content
-                    suggestion_content = (match.group(1) + match.group(2)).strip()
+                    # Extract suggestion content directly
+                    suggestion_content = match.group(1).strip()
                     matches.append(suggestion_content)
 
                 suggestions.extend([
