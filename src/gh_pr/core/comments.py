@@ -138,10 +138,11 @@ class CommentProcessor:
         # Parse diff hunk to get the relevant line
         lines = diff_hunk.split("\n")
 
-        # Find the line at the comment position
-        for line in lines:
-            if line.startswith("+") or line.startswith("-"):
-                # This is a changed line
-                return line[1:].strip()
-
-        return None
+        return next(
+            (
+                line[1:].strip()
+                for line in lines
+                if line.startswith("+") or line.startswith("-")
+            ),
+            None,
+        )
