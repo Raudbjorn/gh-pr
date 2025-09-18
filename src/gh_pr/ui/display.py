@@ -124,7 +124,15 @@ class DisplayManager:
 
             # Check if body contains markdown
             body = comment.get("body", "")
-            if "```" in body or "#" in body or "*" in body:
+            import re
+            markdown_patterns = [
+                r"^#",
+                r"```",
+                r"\[.*?\]\(.*?\)",
+                r"^[-*] ",
+                r"`[^`]+`",
+            ]
+            if any(re.search(pattern, body, re.MULTILINE) for pattern in markdown_patterns):
                 # Render as markdown properly
                 renderables.append(Markdown(body))
             else:
