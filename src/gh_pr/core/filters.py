@@ -1,14 +1,14 @@
 """Comment filtering logic."""
 
-from typing import Dict, List, Any
+from typing import Any
 
 
 class CommentFilter:
     """Filter PR comments based on various criteria."""
 
     def filter_comments(
-        self, threads: List[Dict[str, Any]], mode: str = "unresolved"
-    ) -> List[Dict[str, Any]]:
+        self, threads: list[dict[str, Any]], mode: str = "unresolved"
+    ) -> list[dict[str, Any]]:
         """
         Filter comment threads based on mode.
 
@@ -55,8 +55,8 @@ class CommentFilter:
         return filtered
 
     def filter_by_author(
-        self, threads: List[Dict[str, Any]], author: str
-    ) -> List[Dict[str, Any]]:
+        self, threads: list[dict[str, Any]], author: str
+    ) -> list[dict[str, Any]]:
         """
         Filter threads by comment author.
 
@@ -81,8 +81,8 @@ class CommentFilter:
         return filtered
 
     def filter_by_path(
-        self, threads: List[Dict[str, Any]], path_pattern: str
-    ) -> List[Dict[str, Any]]:
+        self, threads: list[dict[str, Any]], path_pattern: str
+    ) -> list[dict[str, Any]]:
         """
         Filter threads by file path pattern.
 

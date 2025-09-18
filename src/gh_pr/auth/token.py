@@ -1,11 +1,10 @@
 """GitHub token management and validation."""
 
+import logging
 import os
 import subprocess
-import json
-import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, List, Any
+from typing import Any, Optional
 
 from github import Github, GithubException
 from github.Auth import Token as GithubToken
@@ -30,7 +29,7 @@ class TokenManager:
         """
         self.token = self._get_token(token)
         self._github: Optional[Github] = None
-        self._token_info: Optional[Dict[str, Any]] = None
+        self._token_info: Optional[dict[str, Any]] = None
 
     def _get_token(self, token: Optional[str] = None) -> str:
         """
@@ -133,7 +132,7 @@ class TokenManager:
         except GithubException:
             return False
 
-    def get_token_info(self) -> Optional[Dict[str, Any]]:
+    def get_token_info(self) -> Optional[dict[str, Any]]:
         """
         Get information about the current token.
 
@@ -156,7 +155,7 @@ class TokenManager:
             else:
                 token_type = "Unknown"
 
-            info: Dict[str, Any] = {
+            info: dict[str, Any] = {
                 "type": token_type,
                 "scopes": [],
                 "expires_at": None,
@@ -180,13 +179,9 @@ class TokenManager:
             # Check token expiration for fine-grained tokens
             if token_type == "Fine-grained Personal Access Token":
                 # Fine-grained tokens have expiration
-                # Try to get from API if available
-                try:
-                    # This is a placeholder - GitHub API doesn't directly expose token expiry
-                    # In real implementation, you might store this when token is created
-                    pass
-                except Exception:
-                    pass
+                # GitHub API doesn't directly expose token expiry
+                # In real implementation, you might store this when token is created
+                pass
 
             self._token_info = info
             return info
@@ -195,7 +190,7 @@ class TokenManager:
             logger.debug(f"Failed to get token info: {e}")
             return None
 
-    def has_permissions(self, required_scopes: List[str]) -> bool:
+    def has_permissions(self, required_scopes: list[str]) -> bool:
         """
         Check if token has required permissions.
 
@@ -220,7 +215,7 @@ class TokenManager:
         # For classic tokens, check scopes
         return all(scope in token_scopes for scope in required_scopes)
 
-    def _check_fine_grained_permissions(self, required_scopes: List[str]) -> bool:
+    def _check_fine_grained_permissions(self, required_scopes: list[str]) -> bool:
         """
         Check permissions for fine-grained tokens.
 
@@ -289,7 +284,7 @@ class TokenManager:
         except GithubException:
             return False
 
-    def check_expiration(self) -> Optional[Dict[str, Any]]:
+    def check_expiration(self) -> Optional[dict[str, Any]]:
         """
         Check token expiration status.
 

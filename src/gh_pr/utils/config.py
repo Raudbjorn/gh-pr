@@ -1,8 +1,7 @@
 """Configuration management for gh-pr."""
 
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 try:
     import tomllib
@@ -87,7 +86,7 @@ class ConfigManager:
             # If config loading fails, use defaults
             pass
 
-    def _merge_config(self, base: Dict[str, Any], update: Dict[str, Any]) -> None:
+    def _merge_config(self, base: dict[str, Any], update: dict[str, Any]) -> None:
         """
         Recursively merge configuration dictionaries.
 

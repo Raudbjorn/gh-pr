@@ -1,11 +1,9 @@
 """Caching functionality for gh-pr."""
 
-import os
 import hashlib
-import json
 import logging
+import os
 from pathlib import Path
-from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import diskcache
@@ -144,3 +142,4 @@ class CacheManager:
         """
         combined = "_".join(str(p) for p in parts)
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
+

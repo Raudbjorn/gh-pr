@@ -1,10 +1,10 @@
 """Export functionality for PR data."""
 
-import json
 import csv
-from pathlib import Path
-from typing import Dict, List, Any
+import json
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class ExportManager:
@@ -12,8 +12,8 @@ class ExportManager:
 
     def export(
         self,
-        pr_data: Dict[str, Any],
-        comments: List[Dict[str, Any]],
+        pr_data: dict[str, Any],
+        comments: list[dict[str, Any]],
         format: str = "markdown",
     ) -> str:
         """
@@ -55,7 +55,7 @@ class ExportManager:
         return {"markdown": "md", "csv": "csv", "json": "json"}.get(format, "txt")
 
     def _export_markdown(
-        self, pr_data: Dict[str, Any], comments: List[Dict[str, Any]]
+        self, pr_data: dict[str, Any], comments: list[dict[str, Any]]
     ) -> str:
         """Export to Markdown format."""
         lines = []
@@ -105,7 +105,7 @@ class ExportManager:
         return "\n".join(lines)
 
     def _export_csv(
-        self, pr_data: Dict[str, Any], comments: List[Dict[str, Any]]
+        self, pr_data: dict[str, Any], comments: list[dict[str, Any]]
     ) -> str:
         """Export to CSV format."""
         import io
@@ -142,7 +142,7 @@ class ExportManager:
         return output.getvalue()
 
     def _export_json(
-        self, pr_data: Dict[str, Any], comments: List[Dict[str, Any]]
+        self, pr_data: dict[str, Any], comments: list[dict[str, Any]]
     ) -> str:
         """Export to JSON format."""
         export_data = {

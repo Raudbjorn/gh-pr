@@ -1,8 +1,8 @@
 """Clipboard management with WSL2 support."""
 
-import subprocess
 import shutil
-from typing import Optional, List
+import subprocess
+from typing import Optional
 
 
 class ClipboardManager:
@@ -12,7 +12,7 @@ class ClipboardManager:
         """Initialize ClipboardManager."""
         self.clipboard_cmd = self._detect_clipboard_command()
 
-    def _detect_clipboard_command(self) -> Optional[List[str]]:
+    def _detect_clipboard_command(self) -> Optional[list[str]]:
         """
         Detect available clipboard command.
 
@@ -21,7 +21,7 @@ class ClipboardManager:
         """
         # Check for WSL
         try:
-            with open("/proc/version", "r") as f:
+            with open("/proc/version") as f:
                 if "microsoft" in f.read().lower():
                     # WSL detected
                     if shutil.which("clip.exe"):
@@ -83,3 +83,4 @@ class ClipboardManager:
             True if clipboard command is available
         """
         return self.clipboard_cmd is not None
+

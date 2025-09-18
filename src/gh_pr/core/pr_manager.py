@@ -1,18 +1,18 @@
 """PR management and business logic."""
 
+import logging
 import os
 import re
 import subprocess
-import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Any, Optional
 
 from github import GithubException
 
-from .github import GitHubClient
+from ..utils.cache import CacheManager
 from .comments import CommentProcessor
 from .filters import CommentFilter
-from ..utils.cache import CacheManager
+from .github import GitHubClient
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class PRManager:
 
     def parse_pr_identifier(
         self, identifier: str, default_repo: Optional[str] = None
-    ) -> Tuple[str, str, int]:
+    ) -> tuple[str, str, int]:
         """
         Parse PR identifier into owner, repo, and number.
 
@@ -108,7 +108,7 @@ class PRManager:
 
         return None
 
-    def _get_current_repo_info(self) -> Optional[Tuple[str, str]]:
+    def _get_current_repo_info(self) -> Optional[tuple[str, str]]:
         """
         Get current git repository info.
 
@@ -203,7 +203,7 @@ class PRManager:
 
         return None
 
-    def _find_git_repos(self) -> List[Path]:
+    def _find_git_repos(self) -> list[Path]:
         """
         Find git repositories in current directory and subdirectories.
 
@@ -223,7 +223,7 @@ class PRManager:
 
         return repos
 
-    def _get_pr_from_directory(self, directory: Path) -> Optional[Dict[str, Any]]:
+    def _get_pr_from_directory(self, directory: Path) -> Optional[dict[str, Any]]:
         """
         Get PR info from a specific directory.
 
@@ -319,7 +319,7 @@ class PRManager:
 
     def fetch_pr_data(
         self, owner: str, repo: str, pr_number: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch complete PR data.
 
@@ -378,11 +378,11 @@ class PRManager:
             return data
 
         except GithubException as e:
-            raise ValueError(f"Failed to fetch PR data: {str(e)}")
+            raise ValueError(f"Failed to fetch PR data: {str(e)}") from e
 
     def fetch_pr_comments(
         self, owner: str, repo: str, pr_number: int, filter_mode: str = "unresolved"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch and filter PR comments.
 
@@ -408,7 +408,7 @@ class PRManager:
 
     def fetch_check_status(
         self, owner: str, repo: str, pr_number: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch CI/CD check status for a PR.
 
@@ -460,7 +460,7 @@ class PRManager:
 
     def get_pr_summary(
         self, owner: str, repo: str, pr_number: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get a summary of PR status.
 
@@ -557,3 +557,4 @@ class PRManager:
             "Accepting suggestions requires specific API endpoints. "
             "This feature is not yet implemented."
         )
+

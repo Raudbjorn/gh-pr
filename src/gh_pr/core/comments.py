@@ -2,15 +2,15 @@
 
 import datetime
 import hashlib
-from typing import Dict, List, Any, Optional
+from typing import Any, Optional
 
 
 class CommentProcessor:
     """Process and organize PR comments."""
 
     def organize_into_threads(
-        self, comments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, comments: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Organize comments into conversation threads.
 
@@ -62,7 +62,7 @@ class CommentProcessor:
 
         return list(threads.values())
 
-    def _is_comment_outdated(self, comment: Dict[str, Any]) -> bool:
+    def _is_comment_outdated(self, comment: dict[str, Any]) -> bool:
         """
         Determine if a comment is outdated.
 
@@ -78,14 +78,12 @@ class CommentProcessor:
 
         if position is not None and original_position is not None:
             return position != original_position
-        elif position is None and original_position is None:
-            return False  # Cannot determine, assume not outdated
-        else:
-            return True  # One is missing, mapping is incomplete, consider outdated
+        # One or both are None
+        return not (position is None and original_position is None)
 
     def extract_suggestions(
-        self, comments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, comments: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Extract suggestions from comments.
 
@@ -124,7 +122,7 @@ class CommentProcessor:
 
         return suggestions
 
-    def _extract_original_code(self, comment: Dict[str, Any]) -> Optional[str]:
+    def _extract_original_code(self, comment: dict[str, Any]) -> Optional[str]:
         """
         Extract original code from diff hunk.
 
@@ -149,3 +147,4 @@ class CommentProcessor:
             ),
             None,
         )
+

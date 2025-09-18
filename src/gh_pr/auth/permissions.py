@@ -1,6 +1,8 @@
 """Permission checking for GitHub operations."""
 
-from typing import List, Dict, Any
+import contextlib
+from typing import Any
+
 from github import Github, GithubException
 
 
@@ -34,7 +36,7 @@ class PermissionChecker:
 
     def can_perform_operation(
         self, operation: str, owner: str, repo: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Check if current user can perform an operation on a repository.
 
@@ -106,7 +108,7 @@ class PermissionChecker:
 
     def check_pr_permissions(
         self, owner: str, repo: str, pr_number: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Check permissions for a specific PR.
 
@@ -141,12 +143,10 @@ class PermissionChecker:
             permissions["is_author"] = pr.user.login == user.login
 
             # Check if user is a collaborator
-            try:
+            with contextlib.suppress(GithubException):
                 permissions["is_collaborator"] = repository.has_in_collaborators(
                     user.login
                 )
-            except GithubException:
-                pass
 
             # Check if user is a reviewer
             for review in pr.get_reviews():
@@ -200,8 +200,8 @@ class PermissionChecker:
         return permissions
 
     def get_required_permissions_summary(
-        self, operations: List[str]
-    ) -> Dict[str, List[str]]:
+        self, operations: list[str]
+    ) -> dict[str, list[str]]:
         """
         Get a summary of required permissions for multiple operations.
 

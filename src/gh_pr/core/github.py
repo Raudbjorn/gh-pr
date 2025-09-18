@@ -1,6 +1,7 @@
 """GitHub API client wrapper."""
 
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Any, Optional
+
 from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
@@ -79,7 +80,7 @@ class GitHubClient:
 
     def get_open_prs(
         self, owner: str, repo: str, limit: int = 30
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get list of open PRs in a repository.
 
@@ -114,7 +115,7 @@ class GitHubClient:
 
     def get_pr_reviews(
         self, owner: str, repo: str, pr_number: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get reviews for a pull request.
 
@@ -140,7 +141,7 @@ class GitHubClient:
 
     def get_pr_review_comments(
         self, owner: str, repo: str, pr_number: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get review comments for a pull request.
 
@@ -174,7 +175,7 @@ class GitHubClient:
 
     def get_pr_issue_comments(
         self, owner: str, repo: str, pr_number: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get issue comments for a pull request.
 
@@ -200,7 +201,7 @@ class GitHubClient:
 
     def get_pr_files(
         self, owner: str, repo: str, pr_number: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get files changed in a pull request.
 
@@ -227,7 +228,7 @@ class GitHubClient:
 
     def get_check_runs(
         self, owner: str, repo: str, pr_number: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get check runs for a pull request.
 

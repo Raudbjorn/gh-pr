@@ -1,12 +1,13 @@
 """Display and formatting for PR data."""
 
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 from rich.console import Console, Group
-from rich.panel import Panel
-from rich.table import Table
-from rich.syntax import Syntax
-from rich.text import Text
 from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
 
 
 class DisplayManager:
@@ -23,7 +24,7 @@ class DisplayManager:
         self.console = console
         self.verbose = verbose
 
-    def display_pr_header(self, pr_data: Dict[str, Any]) -> None:
+    def display_pr_header(self, pr_data: dict[str, Any]) -> None:
         """
         Display PR header information.
 
@@ -48,7 +49,7 @@ class DisplayManager:
 
     def display_comments(
         self,
-        threads: List[Dict[str, Any]],
+        threads: list[dict[str, Any]],
         show_code: bool = True,
         context_lines: int = 3,
     ) -> None:
@@ -69,7 +70,7 @@ class DisplayManager:
 
     def _display_thread(
         self,
-        thread: Dict[str, Any],
+        thread: dict[str, Any],
         show_code: bool,
         context_lines: int,
     ) -> None:
@@ -183,7 +184,7 @@ class DisplayManager:
                 return lang
         return "text"
 
-    def display_check_status(self, check_status: Dict[str, Any]) -> None:
+    def display_check_status(self, check_status: dict[str, Any]) -> None:
         """
         Display CI/CD check status.
 
@@ -265,7 +266,7 @@ class DisplayManager:
 
         self.console.print(Panel(summary, title="Check Summary", border_style="blue"))
 
-    def display_summary(self, summary: Dict[str, Any]) -> None:
+    def display_summary(self, summary: dict[str, Any]) -> None:
         """
         Display PR summary.
 
@@ -302,9 +303,9 @@ class DisplayManager:
 
     def generate_plain_output(
         self,
-        pr_data: Dict[str, Any],
-        comments: List[Dict[str, Any]],
-        summary: Dict[str, Any],
+        pr_data: dict[str, Any],
+        comments: list[dict[str, Any]],
+        summary: dict[str, Any],
     ) -> str:
         """
         Generate plain text output for clipboard.
@@ -360,3 +361,4 @@ class DisplayManager:
         output.append(f"Changes requested: {summary['changes_requested']}")
 
         return "\n".join(output)
+
