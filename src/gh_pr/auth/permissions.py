@@ -184,7 +184,7 @@ class PermissionChecker:
                                     permissions["can_merge"] = perm_level == "maintain"
                             else:
                                 permissions["can_merge"] = True
-                        except:
+                        except GithubException:
                             permissions["can_merge"] = perm_level in ["write", "maintain"]
                 elif perm_level == "read":
                     permissions["can_comment"] = True
