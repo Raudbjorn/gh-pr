@@ -136,7 +136,10 @@ class PRManager:
             for pattern in patterns:
                 match = re.match(pattern, url)
                 if match:
-                    return match.group(1), match.group(2).rstrip(".git")
+                    repo = match.group(2)
+                    if repo.endswith('.git'):
+                        repo = repo[:-4]
+                    return match.group(1), repo
 
         except (subprocess.SubprocessError, FileNotFoundError):
             pass
