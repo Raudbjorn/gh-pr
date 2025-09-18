@@ -5,17 +5,17 @@ A powerful, feature-rich GitHub Pull Request review tool that enhances your PR w
 ## Features
 
 ### Core Features (From Original Bash Script)
-- [ ] **Auto-detection**: Automatically finds PR for current branch or subdirectories
+- [x] **Auto-detection**: Automatically finds PR for current branch or subdirectories
 - [ ] **Interactive Mode**: Choose from all open PRs in a repository
-- [ ] **Advanced Filtering**:
-  - [ ] All comments
-  - [ ] Unresolved comments only
-  - [ ] Resolved but active comments
-  - [ ] Unresolved outdated comments
-  - [ ] Current unresolved only
-- [ ] **Code Context**: Show code snippets around comments with syntax highlighting
-- [ ] **Caching**: Smart caching with TTL and PR update detection
-- [ ] **Clipboard Support**: WSL2-aware clipboard functionality
+- [x] **Advanced Filtering**:
+  - [x] All comments
+  - [x] Unresolved comments only
+  - [x] Resolved but active comments
+  - [x] Unresolved outdated comments
+  - [x] Current unresolved only
+- [x] **Code Context**: Show code snippets around comments with syntax highlighting
+- [x] **Caching**: Smart caching with TTL and PR update detection
+- [x] **Clipboard Support**: WSL2-aware clipboard functionality
 
 ### New Python Features
 - [ ] **Token Management**:
