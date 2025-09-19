@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import Dict, Any, List, Optional, Tuple
 import requests
 from dataclasses import dataclass
@@ -10,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 # Constants for GraphQL operations
 DEFAULT_TIMEOUT = 30
-MAX_RETRIES = 3
 GRAPHQL_ENDPOINT = "https://api.github.com/graphql"
 
 # GraphQL query fragments
@@ -152,7 +152,6 @@ class GraphQLClient:
         # Security: Validate thread_id format (should be base64 encoded GitHub ID)
         # Base64 can contain A-Z, a-z, 0-9, +, /, and = for padding
         # GitHub also uses - and _ in URL-safe base64
-        import re
         if not re.match(r'^[A-Za-z0-9+/\-_=]+$', thread_id):
             return False, "Invalid thread ID format"
 

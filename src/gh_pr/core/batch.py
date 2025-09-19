@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 # Constants for batch operations
 DEFAULT_RATE_LIMIT = 2.0  # seconds between API calls
 DEFAULT_MAX_CONCURRENT = 5
-DEFAULT_BATCH_SIZE = 10
 
 
 @dataclass
@@ -129,29 +128,44 @@ class BatchOperations:
             time.sleep(self.rate_limit)
         return result
 
-    def resolve_outdated_comments_batch(
+    def _execute_batch_operation(
         self,
         pr_identifiers: List[str],
+        operation: Callable,
+        operation_name: str,
+        permission_key: str,
+        progress_label: str,
+        success_message_template: str,
+        failure_message: str,
+        permission_error: str,
+        result_key: str,
         progress: Optional[Progress] = None
     ) -> List[BatchResult]:
         """
-        Resolve outdated comments for multiple PRs.
+        Generic batch operation executor.
 
         Args:
-            pr_identifiers: List of PR identifiers (owner/repo#number)
+            pr_identifiers: List of PR identifiers
+            operation: The operation to execute
+            operation_name: Name of the operation for logging
+            permission_key: Permission key to check
+            progress_label: Label for progress bar
+            success_message_template: Template for success message
+            failure_message: Message for failures
+            permission_error: Error message for permission issues
+            result_key: Key for result details
             progress: Optional Rich Progress instance
 
         Returns:
-            List of BatchResult objects with detailed results for each PR
+            List of BatchResult objects
         """
         results = []
-        start_time = time.time()
 
         # Setup progress tracking
         task_id = None
         if progress:
             task_id = progress.add_task(
-                "[cyan]Resolving outdated comments...",
+                progress_label,
                 total=len(pr_identifiers)
             )
 
@@ -172,18 +186,18 @@ class BatchOperations:
             try:
                 # Check permissions
                 if not self.permission_checker.has_pr_permissions(
-                    owner, repo, ["resolve_comments"]
+                    owner, repo, [permission_key]
                 ):
                     return BatchResult(
                         pr_identifier=identifier,
                         success=False,
                         message="Insufficient permissions",
-                        error="Cannot resolve comments without write access"
+                        error=permission_error
                     )
 
                 # Execute operation with rate limiting
-                resolved_count, errors = self._execute_with_rate_limit(
-                    self.pr_manager.resolve_outdated_comments,
+                count, errors = self._execute_with_rate_limit(
+                    operation,
                     owner, repo, pr_number
                 )
 
@@ -191,16 +205,16 @@ class BatchOperations:
                     return BatchResult(
                         pr_identifier=identifier,
                         success=False,
-                        message=f"Failed to resolve comments",
-                        details={"resolved": resolved_count},
+                        message=failure_message,
+                        details={result_key: count},
                         error="; ".join(errors)
                     )
 
                 return BatchResult(
                     pr_identifier=identifier,
                     success=True,
-                    message=f"Resolved {resolved_count} outdated comments",
-                    details={"resolved": resolved_count}
+                    message=success_message_template.format(count=count),
+                    details={result_key: count}
                 )
 
             except Exception as e:
@@ -223,13 +237,39 @@ class BatchOperations:
                 result = future.result()
                 results.append(result)
 
-                # Result tracking handled by caller if needed
-
                 # Update progress
                 if progress and task_id is not None:
                     progress.update(task_id, advance=1)
 
         return results
+
+    def resolve_outdated_comments_batch(
+        self,
+        pr_identifiers: List[str],
+        progress: Optional[Progress] = None
+    ) -> List[BatchResult]:
+        """
+        Resolve outdated comments for multiple PRs.
+
+        Args:
+            pr_identifiers: List of PR identifiers (owner/repo#number)
+            progress: Optional Rich Progress instance
+
+        Returns:
+            List of BatchResult objects with detailed results for each PR
+        """
+        return self._execute_batch_operation(
+            pr_identifiers=pr_identifiers,
+            operation=self.pr_manager.resolve_outdated_comments,
+            operation_name="resolve_outdated_comments",
+            permission_key="resolve_comments",
+            progress_label="[cyan]Resolving outdated comments...",
+            success_message_template="Resolved {count} outdated comments",
+            failure_message="Failed to resolve comments",
+            permission_error="Cannot resolve comments without write access",
+            result_key="resolved",
+            progress=progress
+        )
 
     def accept_suggestions_batch(
         self,
@@ -246,92 +286,18 @@ class BatchOperations:
         Returns:
             List of BatchResult objects with detailed results for each PR
         """
-        results = []
-        start_time = time.time()
-
-        # Setup progress tracking
-        task_id = None
-        if progress:
-            task_id = progress.add_task(
-                "[cyan]Accepting suggestions...",
-                total=len(pr_identifiers)
-            )
-
-        def process_pr(identifier: str) -> BatchResult:
-            """Process a single PR."""
-            # Parse identifier
-            parsed = self._parse_pr_identifier(identifier)
-            if not parsed:
-                return BatchResult(
-                    pr_identifier=identifier,
-                    success=False,
-                    message="Invalid PR identifier format",
-                    error="Expected format: owner/repo#123"
-                )
-
-            owner, repo, pr_number = parsed
-
-            try:
-                # Check permissions
-                if not self.permission_checker.has_pr_permissions(
-                    owner, repo, ["accept_suggestions"]
-                ):
-                    return BatchResult(
-                        pr_identifier=identifier,
-                        success=False,
-                        message="Insufficient permissions",
-                        error="Cannot accept suggestions without write access"
-                    )
-
-                # Execute operation with rate limiting
-                accepted_count, errors = self._execute_with_rate_limit(
-                    self.pr_manager.accept_all_suggestions,
-                    owner, repo, pr_number
-                )
-
-                if errors:
-                    return BatchResult(
-                        pr_identifier=identifier,
-                        success=False,
-                        message=f"Failed to accept suggestions",
-                        details={"accepted": accepted_count},
-                        error="; ".join(errors)
-                    )
-
-                return BatchResult(
-                    pr_identifier=identifier,
-                    success=True,
-                    message=f"Accepted {accepted_count} suggestions",
-                    details={"accepted": accepted_count}
-                )
-
-            except Exception as e:
-                logger.error(f"Error processing {identifier}: {e}")
-                return BatchResult(
-                    pr_identifier=identifier,
-                    success=False,
-                    message="Unexpected error",
-                    error=str(e)
-                )
-
-        # Process PRs concurrently
-        with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
-            futures = {
-                executor.submit(process_pr, identifier): identifier
-                for identifier in pr_identifiers
-            }
-
-            for future in as_completed(futures):
-                result = future.result()
-                results.append(result)
-
-                # Result tracking handled by caller if needed
-
-                # Update progress
-                if progress and task_id is not None:
-                    progress.update(task_id, advance=1)
-
-        return results
+        return self._execute_batch_operation(
+            pr_identifiers=pr_identifiers,
+            operation=self.pr_manager.accept_all_suggestions,
+            operation_name="accept_suggestions",
+            permission_key="accept_suggestions",
+            progress_label="[cyan]Accepting suggestions...",
+            success_message_template="Accepted {count} suggestions",
+            failure_message="Failed to accept suggestions",
+            permission_error="Cannot accept suggestions without write access",
+            result_key="accepted",
+            progress=progress
+        )
 
     def get_pr_data_batch(
         self,
@@ -441,8 +407,8 @@ class BatchOperations:
         Returns:
             Dictionary with PR data
         """
-        # This would normally use the PRManager to get PR data
-        # For now, returning a simplified version
+        # Fetch actual PR data from GitHub
+        pr_data = self.pr_manager.fetch_pr_data(owner, repo, pr_number)
         comments = self.pr_manager.get_pr_comments(owner, repo, pr_number)
 
         return {
@@ -450,7 +416,8 @@ class BatchOperations:
             "repo": repo,
             "number": pr_number,
             "identifier": f"{owner}/{repo}#{pr_number}",
-            "title": f"PR #{pr_number}",  # Would fetch from API
+            "title": pr_data.get("title", f"PR #{pr_number}"),
+            "state": pr_data.get("state", "unknown"),
             "comment_count": len(comments) if comments else 0,
             "comments": comments
         }
