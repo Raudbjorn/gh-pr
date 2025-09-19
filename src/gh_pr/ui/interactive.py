@@ -105,11 +105,7 @@ class FilterMenu(Widget):
 
             # Update button states
             for button in self.query(Button):
-                if button.id == event.button.id:
-                    button.variant = "primary"
-                else:
-                    button.variant = "default"
-
+                button.variant = "primary" if button.id == event.button.id else "default"
             # Trigger callback
             if self.on_filter_change:
                 self.on_filter_change(filter_key)
