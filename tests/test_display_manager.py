@@ -13,9 +13,12 @@ class TestDisplayManager:
     """Test DisplayManager class."""
 
     @pytest.fixture
+    @pytest.fixture
     def display_manager(self):
         """Create a DisplayManager instance."""
-        return DisplayManager()
+        from rich.console import Console
+        console = Console()
+        return DisplayManager(console=console, verbose=False)
 
     @pytest.fixture
     def mock_console(self):
