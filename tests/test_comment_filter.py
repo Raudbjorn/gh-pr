@@ -77,14 +77,13 @@ class TestCommentFilter:
         assert result[0]["id"] == "thread1"
         assert result[1]["id"] == "thread3"
 
-    def test_filter_active(self, filter, sample_threads):
-        """Test filtering active (non-outdated) comments."""
-        result = filter.filter_comments(sample_threads, "active")
-        assert len(result) == 2
-        assert all(not thread["is_outdated"] for thread in result)
+    def test_filter_current_unresolved(self, filter, sample_threads):
+        """Test filtering current unresolved comments."""
+        result = filter.filter_comments(sample_threads, "current_unresolved")
+        assert len(result) == 1  # Only thread1 is unresolved and not outdated
         assert result[0]["id"] == "thread1"
-        assert result[1]["id"] == "thread2"
-
+        assert not result[0]["is_resolved"]
+        assert not result[0]["is_outdated"]
     def test_filter_unresolved_outdated(self, filter, sample_threads):
         """Test filtering unresolved outdated comments."""
         result = filter.filter_comments(sample_threads, "unresolved_outdated")
