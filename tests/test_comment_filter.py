@@ -85,13 +85,13 @@ class TestCommentFilter:
         assert result[0]["id"] == "thread1"
         assert result[1]["id"] == "thread2"
 
-    def test_filter_outdated(self, filter, sample_threads):
-        """Test filtering outdated comments."""
-        result = filter.filter_comments(sample_threads, "outdated")
+    def test_filter_unresolved_outdated(self, filter, sample_threads):
+        """Test filtering unresolved outdated comments."""
+        result = filter.filter_comments(sample_threads, "unresolved_outdated")
         assert len(result) == 1
-        assert all(thread["is_outdated"] for thread in result)
         assert result[0]["id"] == "thread3"
-
+        assert not result[0]["is_resolved"]
+        assert result[0]["is_outdated"]
     def test_filter_by_path(self, filter, sample_threads):
         """Test filtering by file path."""
         result = filter.filter_comments(sample_threads, "all", path="src/main.py")
