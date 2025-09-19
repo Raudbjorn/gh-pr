@@ -307,9 +307,9 @@ def _display_detailed_token_info(token_manager: TokenManager):
         days_remaining = expiration['days_remaining']
 
         from datetime import datetime
-        expires_dt = datetime.fromisoformat(expires_at)
+        # Accept both 'Z' and offset forms
+        expires_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         console.print(f"  Expires: {expires_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-
         if expiration['expired']:
             console.print("  Status: [red]✗ EXPIRED[/red]")
         elif expiration['warning']:
