@@ -8,6 +8,7 @@ import os
 import tempfile
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -75,8 +76,6 @@ class TestCachingFlow(unittest.TestCase):
         # Should be expired
         value = cache_manager.get("short_ttl_key")
         self.assertIsNone(value)
-
-from datetime import datetime
 
     def test_cache_manager_with_pr_data_integration(self):
         """Test cache manager integration with PR data workflow."""

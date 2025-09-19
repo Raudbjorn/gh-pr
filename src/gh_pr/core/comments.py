@@ -8,6 +8,19 @@ from typing import Any, Optional
 class CommentProcessor:
     """Process and organize PR comments."""
 
+    def process(self, pr, comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Process PR and comments into organized threads.
+
+        Args:
+            pr: PR object (unused for now, kept for compatibility)
+            comments: List of comment dictionaries
+
+        Returns:
+            List of organized comment threads
+        """
+        return self.organize_into_threads(comments)
+
     def organize_into_threads(
         self, comments: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
