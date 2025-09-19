@@ -99,8 +99,13 @@ class FilterMenu(Widget):
         yield Static("[bold]Filter Comments[/bold]", classes="filter-title")
 
         for filter_key, filter_label in self.FILTERS.items():
-            button = Button(filter_label, id=f"filter_{filter_key}", variant="primary" if filter_key == self.current_filter else "default")
-            yield button
+            yield Button(
+                filter_label,
+                id=f"filter_{filter_key}",
+                variant=(
+                    "primary" if filter_key == self.current_filter else "default"
+                ),
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle filter button press.
