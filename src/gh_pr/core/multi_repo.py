@@ -301,12 +301,12 @@ class MultiRepoManager:
                 combined_filters.update(filters)
 
             # Fetch PRs
-            prs = list(repo_client.get_pulls(
+            prs = repo_client.get_pulls(
                 state=state,
                 sort=combined_filters.get('sort', 'created'),
                 direction=combined_filters.get('direction', 'desc'),
                 base=combined_filters.get('base', repo.default_branch)
-            )[:repo.pr_limit])
+            )[:repo.pr_limit]
 
             return prs
 
