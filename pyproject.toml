@@ -109,7 +109,7 @@ disallow_untyped_decorators = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "--verbose"
+addopts = "--verbose --cov=src/gh_pr --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/gh_pr"]
