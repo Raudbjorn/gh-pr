@@ -346,7 +346,7 @@ class TestBatchOperations:
                 BatchResult(3, True, 5, [], 1.5),
             ]
 
-            summary = self.batch_ops.resolve_outdated_comments_batch(
+            results = self.batch_ops.resolve_outdated_comments_batch(
                 pr_identifiers, show_progress=False
             )
 
@@ -358,10 +358,14 @@ class TestBatchOperations:
                 False
             )
 
-        assert summary.total_prs == 3
-        assert summary.successful == 2
-        assert summary.failed == 1
-        assert summary.total_items_processed == 8  # 3 + 0 + 5
+        # Now returns list[BatchResult] instead of BatchSummary
+        assert len(results) == 3
+        assert results[0].pr_number == 1
+        assert results[0].success is True
+        assert results[1].pr_number == 2
+        assert results[1].success is False
+        assert results[2].pr_number == 3
+        assert results[2].success is True
 
     def test_accept_suggestions_batch(self):
         """Test accept_suggestions_batch method."""
@@ -370,7 +374,7 @@ class TestBatchOperations:
         with patch.object(self.batch_ops, '_execute_with_rate_limit') as mock_execute:
             mock_execute.return_value = [BatchResult(1, True, 2, [], 1.0)]
 
-            summary = self.batch_ops.accept_suggestions_batch(
+            results = self.batch_ops.accept_suggestions_batch(
                 pr_identifiers, show_progress=False
             )
 
@@ -381,17 +385,18 @@ class TestBatchOperations:
                 False
             )
 
-        assert summary.total_prs == 1
-        assert summary.successful == 1
-        assert summary.failed == 0
+        # Now returns list[BatchResult] instead of BatchSummary
+        assert len(results) == 1
+        assert results[0].pr_number == 1
+        assert results[0].success is True
 
     def test_get_pr_data_batch(self):
         """Test get_pr_data_batch method."""
         pr_identifiers = [("owner", "repo", 1)]
 
         # Mock the PR manager methods
-        self.mock_pr_manager.get_pr_data.return_value = {"number": 1, "title": "Test PR"}
-        self.mock_pr_manager.get_pr_comments.return_value = [{"id": "comment1"}]
+        self.mock_pr_manager.fetch_pr_data.return_value = {"number": 1, "title": "Test PR"}
+        self.mock_pr_manager.fetch_pr_comments.return_value = [{"id": "comment1"}]
 
         with patch.object(self.batch_ops, '_execute_with_rate_limit') as mock_execute:
             expected_result = {
@@ -415,7 +420,7 @@ class TestBatchOperations:
     def test_get_pr_data_batch_wrapper_exception(self):
         """Test get_pr_data_batch wrapper function exception handling."""
         # Mock PR manager method to raise exception
-        self.mock_pr_manager.get_pr_data.side_effect = Exception("API Error")
+        self.mock_pr_manager.fetch_pr_data.side_effect = Exception("API Error")
 
         pr_identifiers = [("owner", "repo", 1)]
 

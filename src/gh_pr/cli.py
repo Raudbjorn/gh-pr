@@ -280,37 +280,45 @@ def _handle_batch_operations(cfg: CLIConfig, pr_manager: PRManager, export_manag
     # Perform batch operations based on flags
     if cfg.resolve_outdated:
         console.print("[yellow]Batch resolving outdated comments...[/yellow]")
-        summary = batch_ops.resolve_outdated_comments_batch(pr_identifiers)
+        results = batch_ops.resolve_outdated_comments_batch(pr_identifiers)
+
+        # Create summary for display
+        from gh_pr.core.batch import BatchOperations
+        summary = BatchOperations.create_summary_from_results(results, "comments resolved")
         batch_ops.print_summary(summary, "Resolve Outdated Comments")
 
         if cfg.export:
             # Convert batch results to exportable format
             batch_results = [
                 {
-                    "pr_number": pr_id[2],  # pr_number from (owner, repo, pr_number)
-                    "success": True,  # Simplified for example
-                    "result": 0,  # Would need to track actual results
-                    "errors": []
+                    "pr_number": result.pr_number,
+                    "success": result.success,
+                    "result": result.result,
+                    "errors": result.errors or []
                 }
-                for pr_id in pr_identifiers
+                for result in results
             ]
             export_path = export_manager.export_batch_report(batch_results, cfg.export)
             console.print(f"[green]Batch report exported to: {export_path}[/green]")
 
     elif cfg.accept_suggestions:
         console.print("[yellow]Batch accepting suggestions...[/yellow]")
-        summary = batch_ops.accept_suggestions_batch(pr_identifiers)
+        results = batch_ops.accept_suggestions_batch(pr_identifiers)
+
+        # Create summary for display
+        from gh_pr.core.batch import BatchOperations
+        summary = BatchOperations.create_summary_from_results(results, "suggestions accepted")
         batch_ops.print_summary(summary, "Accept Suggestions")
 
         if cfg.export:
             batch_results = [
                 {
-                    "pr_number": pr_id[2],
-                    "success": True,
-                    "result": 0,
-                    "errors": []
+                    "pr_number": result.pr_number,
+                    "success": result.success,
+                    "result": result.result,
+                    "errors": result.errors or []
                 }
-                for pr_id in pr_identifiers
+                for result in results
             ]
             export_path = export_manager.export_batch_report(batch_results, cfg.export)
             console.print(f"[green]Batch report exported to: {export_path}[/green]")

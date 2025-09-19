@@ -235,7 +235,7 @@ class BatchOperations:
         self,
         pr_identifiers: list[tuple[str, str, int]],
         show_progress: bool = True
-    ) -> BatchSummary:
+    ) -> list[BatchResult]:
         """
         Resolve outdated comments for multiple PRs.
 
@@ -244,7 +244,7 @@ class BatchOperations:
             show_progress: Whether to show progress bar
 
         Returns:
-            BatchSummary with operation results
+            List of BatchResult objects with detailed results for each PR
         """
         logger.info(f"Starting batch resolve outdated comments for {len(pr_identifiers)} PRs")
 
@@ -255,13 +255,13 @@ class BatchOperations:
             show_progress
         )
 
-        return self._create_summary(results, "comments resolved")
+        return results
 
     def accept_suggestions_batch(
         self,
         pr_identifiers: list[tuple[str, str, int]],
         show_progress: bool = True
-    ) -> BatchSummary:
+    ) -> list[BatchResult]:
         """
         Accept all suggestions for multiple PRs.
 
@@ -270,7 +270,7 @@ class BatchOperations:
             show_progress: Whether to show progress bar
 
         Returns:
-            BatchSummary with operation results
+            List of BatchResult objects with detailed results for each PR
         """
         logger.info(f"Starting batch accept suggestions for {len(pr_identifiers)} PRs")
 
@@ -281,7 +281,7 @@ class BatchOperations:
             show_progress
         )
 
-        return self._create_summary(results, "suggestions accepted")
+        return results
 
     def get_pr_data_batch(
         self,
@@ -303,8 +303,8 @@ class BatchOperations:
         def get_pr_data_wrapper(owner: str, repo: str, pr_number: int):
             """Wrapper to get PR data and comments."""
             try:
-                pr_data = self.pr_manager.get_pr_data(owner, repo, pr_number)
-                comments = self.pr_manager.get_pr_comments(owner, repo, pr_number)
+                pr_data = self.pr_manager.fetch_pr_data(owner, repo, pr_number)
+                comments = self.pr_manager.fetch_pr_comments(owner, repo, pr_number)
                 return {"pr_data": pr_data, "comments": comments}
             except Exception as e:
                 raise Exception(f"Failed to get PR data: {str(e)}")
@@ -314,6 +314,42 @@ class BatchOperations:
             pr_identifiers,
             "Collecting PR data",
             show_progress
+        )
+
+    @staticmethod
+    def create_summary_from_results(results: list[BatchResult], item_description: str) -> BatchSummary:
+        """
+        Create a summary from batch results.
+
+        This is a static method to allow callers to create summaries from results if needed.
+
+        Args:
+            results: List of BatchResult objects
+            item_description: Description of items processed (e.g., "comments resolved")
+
+        Returns:
+            BatchSummary with aggregated results
+        """
+        successful = sum(1 for r in results if r.success)
+        failed = len(results) - successful
+        total_items = sum(r.result if r.success and isinstance(r.result, int) else 0 for r in results)
+        total_duration = sum(r.duration for r in results)
+
+        # Collect all errors
+        all_errors = []
+        for result in results:
+            if result.errors:
+                for error in result.errors:
+                    all_errors.append(f"PR #{result.pr_number}: {error}")
+
+        return BatchSummary(
+            total=len(results),
+            successful=successful,
+            failed=failed,
+            total_items=total_items,
+            total_duration=total_duration,
+            errors=all_errors,
+            item_description=item_description
         )
 
     def _create_summary(self, results: list[BatchResult], item_description: str) -> BatchSummary:

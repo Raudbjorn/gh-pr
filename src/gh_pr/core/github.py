@@ -22,6 +22,7 @@ class GitHubClient:
             token: GitHub authentication token
             timeout: API request timeout in seconds
         """
+        self.token = token  # Store token for GraphQL client
         self.github = Github(token, timeout=timeout)
         self._user = None
         self.timeout = timeout

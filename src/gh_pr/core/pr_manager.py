@@ -71,8 +71,8 @@ class PRManager:
     def graphql(self) -> GraphQLClient:
         """Get GraphQL client, initializing if needed."""
         if self._graphql_client is None:
-            # Extract token from PyGithub client
-            token = self.github.github._Github__requester._Requester__auth.token
+            # Use the token stored in GitHubClient
+            token = self.github.token
             self._graphql_client = GraphQLClient(token)
         return self._graphql_client
 

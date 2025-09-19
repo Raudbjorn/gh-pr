@@ -314,7 +314,7 @@ class TestGraphQLClient:
             # Check the mutation and variables
             call_args = mock_execute.call_args
             assert "resolveReviewThread" in call_args[0][0]
-            assert call_args[1]["variables"] == {"threadId": "thread123"}
+            assert call_args[0][1] == {"threadId": "thread123"}
 
     def test_resolve_thread_with_whitespace_id(self):
         """Test resolve_thread strips whitespace from ID."""
@@ -326,7 +326,7 @@ class TestGraphQLClient:
             result = client.resolve_thread("  thread123  ")
 
             call_args = mock_execute.call_args
-            assert call_args[1]["variables"] == {"threadId": "thread123"}
+            assert call_args[0][1] == {"threadId": "thread123"}
 
     def test_resolve_thread_with_empty_id(self):
         """Test resolve_thread with empty thread ID."""
@@ -361,7 +361,7 @@ class TestGraphQLClient:
             # Check the mutation and variables
             call_args = mock_execute.call_args
             assert "acceptSuggestion" in call_args[0][0]
-            assert call_args[1]["variables"] == {"suggestionId": "suggestion123"}
+            assert call_args[0][1] == {"suggestionId": "suggestion123"}
 
     def test_accept_suggestion_with_empty_id(self):
         """Test accept_suggestion with empty suggestion ID."""
@@ -378,7 +378,16 @@ class TestGraphQLClient:
         client = GraphQLClient("test_token")
 
         with patch.object(client, 'execute') as mock_execute:
-            mock_execute.return_value = GraphQLResult(data={"repository": {"pullRequest": {}}})
+            mock_execute.return_value = GraphQLResult(data={
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None}
+                        }
+                    }
+                }
+            })
 
             result = client.get_pr_threads("owner", "repo", 123)
 
@@ -387,10 +396,11 @@ class TestGraphQLClient:
 
             call_args = mock_execute.call_args
             assert "GetPRThreads" in call_args[0][0]
-            assert call_args[1]["variables"] == {
+            assert call_args[0][1] == {
                 "owner": "owner",
                 "repo": "repo",
-                "number": 123
+                "number": 123,
+                "cursor": None
             }
 
     def test_get_pr_threads_strips_whitespace(self):
