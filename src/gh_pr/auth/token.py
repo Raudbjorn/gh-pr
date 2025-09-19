@@ -64,9 +64,9 @@ class TokenManager:
 
         # Try configuration file
         if self.config_manager:
-            if config_token := self.config_manager.get("github.token"):
-                return config_token
-
+            for key in ("github.token", "github.default_token"):
+                if config_token := self.config_manager.get(key):
+                    return config_token
         # Try gh CLI
         if gh_token := self._get_gh_cli_token():
             return gh_token
