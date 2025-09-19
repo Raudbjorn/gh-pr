@@ -24,7 +24,7 @@ class TestTokenIntegration:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
             f.write("""
 [github]
-token = "ghp_test_config_token_12345"
+token = "ghp_test_config_token_12345"  # noqa: S105
 check_token_expiry = true
 
 [cache]
@@ -55,7 +55,7 @@ enabled = false
     def test_token_info_command(self, mock_github):
         """Test --token-info command displays detailed token information."""
         runner = CliRunner()
-        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token_12345"}):
+        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token_12345"}):  # noqa: S106
             result = runner.invoke(main, ["--token-info"])
 
         assert result.exit_code == 0
@@ -86,7 +86,7 @@ enabled = false
                 "warning": True,
             }
 
-            with patch.dict(os.environ, {"GH_TOKEN": "github_pat_test_token"}):
+            with patch.dict(os.environ, {"GH_TOKEN": "github_pat_test_token"}):  # noqa: S106
                 result = runner.invoke(main, ["--token-info"])
 
         assert result.exit_code == 0
@@ -105,7 +105,7 @@ enabled = false
                 "warning": False,
             }
 
-            with patch.dict(os.environ, {"GH_TOKEN": "github_pat_expired_token"}):
+            with patch.dict(os.environ, {"GH_TOKEN": "github_pat_expired_token"}):  # noqa: S106
                 # Don't auto-confirm the prompt
                 result = runner.invoke(main, ["53"], input="n\n")
 
@@ -167,7 +167,7 @@ class TestTokenPermissions:
         """Test permission checking before automation commands."""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):
+        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):  # noqa: S106
             # Try to use automation without proper permissions
             with patch("gh_pr.auth.token.TokenManager.has_permissions") as mock_perm:
                 mock_perm.return_value = False
@@ -181,7 +181,7 @@ class TestTokenPermissions:
     def test_fine_grained_token_permission_detection(self):
         """Test permission detection for fine-grained tokens."""
         config = ConfigManager()
-        manager = TokenManager(token="github_pat_fine_grained", config_manager=config)
+        manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
 
         with patch.object(manager, "_check_fine_grained_permissions") as mock_check:
             mock_check.return_value = True
@@ -202,7 +202,7 @@ class TestTokenStorage:
 
             # Create and save config with token metadata
             config = ConfigManager(str(config_path))
-            manager = TokenManager(token="github_pat_test123", config_manager=config)
+            manager = TokenManager(token="github_pat_test123", config_manager=config)  # noqa: S106
 
             expires_at = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
             manager.store_token_metadata(expires_at=expires_at)
@@ -227,7 +227,7 @@ class TestTokenStorage:
         config.set("tokens.github_pat.expires_at", future_date.isoformat())
 
         # Create token manager with this config
-        manager = TokenManager(token="github_pat_12345", config_manager=config)
+        manager = TokenManager(token="github_pat_12345", config_manager=config)  # noqa: S106
 
         with patch("gh_pr.auth.token.Github") as mock_github_class:
             mock_github = Mock()
@@ -273,7 +273,7 @@ class TestCLITokenFeatures:
             mock_github.get_pull_request = Mock()
             mock_github_class.return_value = mock_github
 
-            with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):
+            with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):  # noqa: S106
                 with patch("gh_pr.core.pr_manager.PRManager.auto_detect_pr") as mock_auto:
                     mock_auto.return_value = "owner/repo#1"
                     with patch("gh_pr.core.pr_manager.PRManager.fetch_pr_data") as mock_fetch:

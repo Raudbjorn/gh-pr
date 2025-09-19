@@ -1,9 +1,10 @@
 """GitHub token management and validation."""
 
+import hashlib
 import logging
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from github import Github, GithubException
@@ -86,11 +87,16 @@ class TokenManager:
         try:
             # Try to get auth status from gh CLI
             # Security: GH_CLI_AUTH_STATUS_CMD is a hardcoded constant list, not user input
+            # Safe because:
+            # 1. Command is a predefined list constant, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Has timeout to prevent hanging
             result = subprocess.run(
                 GH_CLI_AUTH_STATUS_CMD,  # Static constant: ["gh", "auth", "status", "--show-token"]
                 capture_output=True,
                 text=True,
-                timeout=SUBPROCESS_TIMEOUT
+                timeout=SUBPROCESS_TIMEOUT,
+                check=False  # Explicitly don't raise on non-zero exit
             )
 
             # Parse token from output
@@ -100,11 +106,16 @@ class TokenManager:
 
             # Alternative: try to get token from gh config
             # Security: GH_CLI_AUTH_TOKEN_CMD is a hardcoded constant list, not user input
+            # Safe because:
+            # 1. Command is a predefined list constant, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Has timeout to prevent hanging
             result = subprocess.run(
                 GH_CLI_AUTH_TOKEN_CMD,  # Static constant: ["gh", "auth", "token"]
                 capture_output=True,
                 text=True,
-                timeout=SUBPROCESS_TIMEOUT
+                timeout=SUBPROCESS_TIMEOUT,
+                check=False  # Explicitly don't raise on non-zero exit
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -139,7 +150,7 @@ class TokenManager:
             user = github.get_user()
             _ = user.login  # Force API call
             return True
-        except GithubException:
+        except (GithubException, Exception):
             return False
 
     def get_token_info(self) -> Optional[dict[str, Any]]:
@@ -197,14 +208,10 @@ class TokenManager:
             info["scopes"] = []  # Unable to determine scopes without private attribute access
 
             # Check token expiration for fine-grained tokens
-            if token_type == "Fine-grained Personal Access Token":
-                # Fine-grained tokens have expiration (typically 60-365 days)
-                # Try to get from stored metadata if available
-                if self.config_manager:
+            if token_type == "Fine-grained Personal Access Token" and self.config_manager:
                     stored_expiry = self.config_manager.get(f"tokens.{self.token[:10]}.expires_at")
                     if stored_expiry:
                         info["expires_at"] = stored_expiry
-                        from datetime import datetime
                         expires_dt = datetime.fromisoformat(stored_expiry)
                         now = datetime.now(timezone.utc)
                         days_remaining = (expires_dt - now).days
@@ -271,7 +278,7 @@ class TokenManager:
                         # Try to list repos (contents access)
                         try:
                             user.get_repos(type="all")[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "pull_requests":
                         # Try to list pull requests for a repo
@@ -280,7 +287,7 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_pulls()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "issues":
                         # Try to list issues for a repo
@@ -289,7 +296,7 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_issues()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "discussions":
                         # Try to list discussions for a repo
@@ -298,13 +305,13 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_discussions()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "organization":
                         # Try to get organizations
                         try:
                             user.get_orgs()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
             return True
 
@@ -332,14 +339,12 @@ class TokenManager:
         # For GitHub App tokens, they typically expire after 1 hour
         if info.get("type") == "GitHub App Installation Token":
             # Estimate 1 hour from now (conservative estimate)
-            from datetime import datetime, timedelta
             expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
             expires_at_str = expires_at.isoformat()
 
         if not expires_at_str:
             return None
 
-        from datetime import datetime
         expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
         now = datetime.now(timezone.utc)
         days_remaining = (expires_at - now).days

@@ -31,7 +31,7 @@ class TestGitHubClient:
         """Test GitHubClient initialization."""
         client = GitHubClient("test_token_123")
         assert client.token == "test_token_123"
-        assert client._github is not None
+        assert client.github is not None
         assert client._user is None
 
     def test_user_property_caching(self, client, mock_github):

@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 from github import GithubException
 
-from gh_pr.cli import cli_group as cli
+from gh_pr.cli import main as cli
 
 
 class TestCLIIntegration:

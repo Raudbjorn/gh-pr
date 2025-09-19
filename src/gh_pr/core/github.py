@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
@@ -17,7 +17,9 @@ class GitHubClient:
         Args:
             token: GitHub authentication token
         """
-        self.github = Github(token)
+        self.token = token  # Store token publicly for GraphQL client
+        auth = Auth.Token(token)
+        self.github = Github(auth=auth)
         self._user = None
 
     @property
@@ -107,7 +109,8 @@ class GitHubClient:
                 "created_at": pr.created_at.isoformat() if pr.created_at else None,
                 "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
                 "draft": pr.draft,
-                "mergeable": pr.mergeable,
+                # Skip mergeable field - it triggers expensive API call
+                # "mergeable": pr.mergeable,
                 "labels": [label.name for label in pr.labels],
             })
 

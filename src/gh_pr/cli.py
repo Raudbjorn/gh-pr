@@ -3,9 +3,11 @@
 
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 import click
+from github import GithubException
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -289,10 +291,9 @@ def _display_detailed_token_info(token_manager: TokenManager):
         limit = rate_limit.get('limit', 'N/A')
         reset_time = rate_limit.get('reset', 'N/A')
 
-        console.print(f"\n[bold]Rate Limit:[/bold]")
+        console.print("\n[bold]Rate Limit:[/bold]")
         console.print(f"  Remaining: {remaining} / {limit}")
         if reset_time and reset_time != 'N/A':
-            from datetime import datetime
             try:
                 reset_dt = datetime.fromisoformat(reset_time.replace('Z', '+00:00'))
                 console.print(f"  Resets: {reset_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -302,11 +303,10 @@ def _display_detailed_token_info(token_manager: TokenManager):
     # Display expiration info
     expiration = token_manager.check_expiration()
     if expiration:
-        console.print(f"\n[bold]Expiration:[/bold]")
+        console.print("\n[bold]Expiration:[/bold]")
         expires_at = expiration['expires_at']
         days_remaining = expiration['days_remaining']
 
-        from datetime import datetime
         # Accept both 'Z' and offset forms
         expires_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         console.print(f"  Expires: {expires_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -317,10 +317,10 @@ def _display_detailed_token_info(token_manager: TokenManager):
         else:
             console.print(f"  Status: [green]✓ Valid for {days_remaining} more days[/green]")
     else:
-        console.print(f"\n[bold]Expiration:[/bold] No expiration (token does not expire)")
+        console.print("\n[bold]Expiration:[/bold] No expiration (token does not expire)")
 
     # Test repository access
-    console.print(f"\n[bold]Testing Permissions:[/bold]")
+    console.print("\n[bold]Testing Permissions:[/bold]")
     try:
         github = token_manager.get_github_client()
         user = github.get_user()
@@ -333,7 +333,7 @@ def _display_detailed_token_info(token_manager: TokenManager):
             ("read:org", "Organization read access")
         ]
 
-        console.print(f"\n[bold]Permission Check:[/bold]")
+        console.print("\n[bold]Permission Check:[/bold]")
         for scope, description in permissions_to_check:
             has_perm = token_manager.has_permissions([scope])
             status = "[green]✓[/green]" if has_perm else "[red]✗[/red]"
