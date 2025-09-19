@@ -347,8 +347,7 @@ def _display_detailed_token_info(token_manager: TokenManager):
 
 def _check_token_expiration(token_manager: TokenManager):
     """Check and warn about token expiration."""
-    expiration = token_manager.check_expiration()
-    if expiration:
+    if expiration := token_manager.check_expiration():
         if expiration['expired']:
             console.print("[red]⚠ Your GitHub token has EXPIRED! Please generate a new token.[/red]")
             if not click.confirm("Continue anyway?"):
