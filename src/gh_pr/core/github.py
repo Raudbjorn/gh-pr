@@ -334,11 +334,14 @@ class GitHubClient:
         # Would need to use requests library directly
         return False
 
-    def get_current_user_login(self) -> str:
+    def get_current_user_login(self) -> Optional[str]:
         """
         Get the login of the current authenticated user.
 
         Returns:
-            User login string
+            User login string or None if error
         """
-        return self.user.login
+        try:
+            return self.user.login
+        except GithubException:
+            return None
