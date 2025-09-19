@@ -190,22 +190,6 @@ class FilterOptionsMenu(Widget):
             yield RadioButton("Current Code", id="loc_current")
             yield RadioButton("Outdated Code", id="loc_outdated")
 
-        if event.radio_set.id == "filter_status":
-            pressed = getattr(event, "pressed", None)
-            if pressed:
-                self.filters["status"] = {
-                    "status_all": "all",
-                    "status_unresolved": "unresolved",
-                    "status_resolved": "resolved",
-                }.get(pressed.id, self.filters["status"])
-        elif event.radio_set.id == "filter_location":
-            pressed = getattr(event, "pressed", None)
-            if pressed:
-                self.filters["location"] = {
-                    "loc_all": "all",
-                    "loc_current": "current",
-                    "loc_outdated": "outdated",
-                }.get(pressed.id, self.filters["location"])
         # Additional filters
         yield Label("Additional Filters:")
         yield Switch("Has Suggestions", id="filter_suggestions")
