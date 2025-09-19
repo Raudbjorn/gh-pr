@@ -21,20 +21,26 @@ logger = logging.getLogger(__name__)
 class PRManager:
     """Manages PR operations and business logic."""
 
-    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager):
+    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager, token: Optional[str] = None):
         """
         Initialize PRManager.
 
         Args:
             github_client: GitHub API client
             cache_manager: Cache manager instance
+            token: GitHub token for GraphQL client (optional)
         """
         self.github = github_client
         self.cache = cache_manager
         self.comment_processor = CommentProcessor()
         self.filter = CommentFilter()
-        # Initialize GraphQL client using the same token as GitHub client
-        self.graphql = GraphQLClient(github_client.github._Github__requester._Requester__authorizationHeader.replace("token ", ""))
+
+        # Initialize GraphQL client with provided token or None
+        # If no token provided, GraphQL operations will not be available
+        if token:
+            self.graphql = GraphQLClient(token)
+        else:
+            self.graphql = None
 
     def parse_pr_identifier(
         self, identifier: str, default_repo: Optional[str] = None
@@ -534,6 +540,10 @@ class PRManager:
         resolved_count = 0
         errors = []
 
+        if not self.graphql:
+            errors.append("GraphQL client not initialized. Token required for this operation.")
+            return resolved_count, errors
+
         # Get all review threads using GraphQL
         threads, error = self.graphql.get_pr_threads(owner, repo, pr_number)
 
@@ -575,6 +585,10 @@ class PRManager:
         """
         accepted_count = 0
         errors = []
+
+        if not self.graphql:
+            errors.append("GraphQL client not initialized. Token required for this operation.")
+            return accepted_count, errors
 
         # Get all suggestions using GraphQL
         suggestions, error = self.graphql.get_pr_suggestions(owner, repo, pr_number)

@@ -1,6 +1,7 @@
 """Batch operations for processing multiple PRs."""
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -69,6 +70,8 @@ class BatchOperations:
         self.permission_checker = permission_checker
         self.rate_limit = max(0.1, rate_limit)  # Minimum 0.1 seconds
         self.max_concurrent = max(1, min(max_concurrent, 20))  # Between 1 and 20
+        # Lock for rate limiting API calls
+        self.api_lock = threading.Lock()
 
     def _parse_pr_identifier(self, identifier: str) -> Optional[Tuple[str, str, int]]:
         """
@@ -119,15 +122,18 @@ class BatchOperations:
         Returns:
             Result from operation
         """
-        result = operation(*args, **kwargs)
-        time.sleep(self.rate_limit)
+        # Use lock to ensure only one API call happens at a time
+        # This properly enforces rate limiting across all threads
+        with self.api_lock:
+            result = operation(*args, **kwargs)
+            time.sleep(self.rate_limit)
         return result
 
     def resolve_outdated_comments_batch(
         self,
         pr_identifiers: List[str],
         progress: Optional[Progress] = None
-    ) -> BatchSummary:
+    ) -> List[BatchResult]:
         """
         Resolve outdated comments for multiple PRs.
 
@@ -136,9 +142,9 @@ class BatchOperations:
             progress: Optional Rich Progress instance
 
         Returns:
-            BatchSummary with results
+            List of BatchResult objects with detailed results for each PR
         """
-        summary = BatchSummary(total=len(pr_identifiers))
+        results = []
         start_time = time.time()
 
         # Setup progress tracking
@@ -215,27 +221,21 @@ class BatchOperations:
 
             for future in as_completed(futures):
                 result = future.result()
-                summary.results.append(result)
+                results.append(result)
 
-                if result.success:
-                    summary.successful += 1
-                else:
-                    summary.failed += 1
-                    if result.error:
-                        summary.errors.append(f"{result.pr_identifier}: {result.error}")
+                # Result tracking handled by caller if needed
 
                 # Update progress
                 if progress and task_id is not None:
                     progress.update(task_id, advance=1)
 
-        summary.duration = time.time() - start_time
-        return summary
+        return results
 
     def accept_suggestions_batch(
         self,
         pr_identifiers: List[str],
         progress: Optional[Progress] = None
-    ) -> BatchSummary:
+    ) -> List[BatchResult]:
         """
         Accept all suggestions for multiple PRs.
 
@@ -244,9 +244,9 @@ class BatchOperations:
             progress: Optional Rich Progress instance
 
         Returns:
-            BatchSummary with results
+            List of BatchResult objects with detailed results for each PR
         """
-        summary = BatchSummary(total=len(pr_identifiers))
+        results = []
         start_time = time.time()
 
         # Setup progress tracking
@@ -323,21 +323,15 @@ class BatchOperations:
 
             for future in as_completed(futures):
                 result = future.result()
-                summary.results.append(result)
+                results.append(result)
 
-                if result.success:
-                    summary.successful += 1
-                else:
-                    summary.failed += 1
-                    if result.error:
-                        summary.errors.append(f"{result.pr_identifier}: {result.error}")
+                # Result tracking handled by caller if needed
 
                 # Update progress
                 if progress and task_id is not None:
                     progress.update(task_id, advance=1)
 
-        summary.duration = time.time() - start_time
-        return summary
+        return results
 
     def get_pr_data_batch(
         self,
@@ -418,7 +412,7 @@ class BatchOperations:
 
             for future in as_completed(futures):
                 pr_data, result = future.result()
-                summary.results.append(result)
+                results.append(result)
 
                 if result.success and pr_data:
                     pr_data_list.append(pr_data)

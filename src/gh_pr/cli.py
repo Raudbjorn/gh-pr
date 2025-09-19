@@ -3,6 +3,7 @@
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -12,13 +13,14 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .auth.permissions import PermissionChecker
 from .auth.token import TokenManager
-from .core.batch import BatchOperations
+from .core.batch import BatchOperations, BatchSummary
 from .core.github import GitHubClient
 from .core.pr_manager import PRManager
 from .ui.display import DisplayManager
 from .utils.cache import CacheManager
 from .utils.clipboard import ClipboardManager
 from .utils.config import ConfigManager
+from .utils.export import ExportManager
 
 console = Console()
 
@@ -152,8 +154,9 @@ def main(**kwargs) -> None:
         _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
 
         # Initialize clients and managers
-        github_client = GitHubClient(token_manager.get_token())
-        pr_manager = PRManager(github_client, cache_manager)
+        token = token_manager.get_token()
+        github_client = GitHubClient(token)
+        pr_manager = PRManager(github_client, cache_manager, token)
         display_manager = DisplayManager(console, verbose=cfg.verbose)
 
         # Handle batch operations
@@ -361,8 +364,6 @@ def _handle_batch_operations(
     accept_suggestions: bool
 ):
     """Handle batch operations for multiple PRs."""
-    from pathlib import Path
-    from .utils.export import ExportManager
 
     # Read PR identifiers from file
     batch_path = Path(batch_file)
@@ -384,25 +385,34 @@ def _handle_batch_operations(
     with Progress(console=console) as progress:
         if resolve_outdated:
             console.print("\n[bold]Resolving outdated comments...[/bold]")
-            summary = batch_ops.resolve_outdated_comments_batch(pr_identifiers, progress)
-            _display_batch_summary(summary, "resolve_outdated")
+            results = batch_ops.resolve_outdated_comments_batch(pr_identifiers, progress)
+            _display_batch_results(results, "resolve_outdated")
 
         if accept_suggestions:
             console.print("\n[bold]Accepting suggestions...[/bold]")
-            summary = batch_ops.accept_suggestions_batch(pr_identifiers, progress)
-            _display_batch_summary(summary, "accept_suggestions")
+            results = batch_ops.accept_suggestions_batch(pr_identifiers, progress)
+            _display_batch_results(results, "accept_suggestions")
 
 
-def _display_batch_summary(summary, operation: str):
-    """Display batch operation summary."""
-    from .utils.export import ExportManager
+def _display_batch_results(results, operation: str):
+    """Display batch operation results."""
+
+    # Create summary from results
+    summary = BatchSummary(total=len(results))
+    for result in results:
+        summary.results.append(result)
+        if result.success:
+            summary.successful += 1
+        else:
+            summary.failed += 1
+            if result.error:
+                summary.errors.append(f"{result.pr_identifier}: {result.error}")
 
     console.print(f"\n[bold]Batch Operation Summary[/bold]")
     console.print(f"Total: {summary.total}")
     console.print(f"Successful: [green]{summary.successful}[/green]")
     console.print(f"Failed: [red]{summary.failed}[/red]")
     console.print(f"Success Rate: {summary.success_rate:.1f}%")
-    console.print(f"Duration: {summary.duration:.2f} seconds")
 
     if summary.errors:
         console.print("\n[yellow]Errors:[/yellow]")
@@ -438,13 +448,11 @@ def _handle_output(
 ):
     """Handle export and clipboard operations."""
     if export:
-        from .utils.export import ExportManager
         export_manager = ExportManager()
         output_file = export_manager.export(pr_data, comments, format=export)
         console.print(f"[green]✓ Exported to {output_file}[/green]")
 
     if review_report:
-        from .utils.export import ExportManager
         export_manager = ExportManager()
         report_file = export_manager.export_review_report(pr_data, summary)
         console.print(f"[green]✓ Generated review report: {report_file}[/green]")

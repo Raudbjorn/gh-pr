@@ -150,7 +150,10 @@ class GraphQLClient:
             return False, "Thread ID is required"
 
         # Security: Validate thread_id format (should be base64 encoded GitHub ID)
-        if not thread_id.replace("=", "").replace("-", "").replace("_", "").isalnum():
+        # Base64 can contain A-Z, a-z, 0-9, +, /, and = for padding
+        # GitHub also uses - and _ in URL-safe base64
+        import re
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', thread_id):
             return False, "Invalid thread ID format"
 
         mutation = """
@@ -197,8 +200,10 @@ class GraphQLClient:
         if not suggestion_id:
             return False, "Suggestion ID is required"
 
-        # Security: Validate suggestion_id format
-        if not suggestion_id.replace("=", "").replace("-", "").replace("_", "").isalnum():
+        # Security: Validate suggestion_id format (base64 encoded GitHub ID)
+        # Base64 can contain A-Z, a-z, 0-9, +, /, and = for padding
+        # GitHub also uses - and _ in URL-safe base64
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', suggestion_id):
             return False, "Invalid suggestion ID format"
 
         mutation = """
@@ -257,12 +262,16 @@ class GraphQLClient:
             return None, "PR number must be a positive integer"
 
         query = f"""
-        query GetPRThreads($owner: String!, $repo: String!, $number: Int!) {{
+        query GetPRThreads($owner: String!, $repo: String!, $number: Int!, $cursor: String) {{
             repository(owner: $owner, name: $repo) {{
                 pullRequest(number: $number) {{
-                    reviewThreads(first: 100) {{
+                    reviewThreads(first: 100, after: $cursor) {{
                         nodes {{
                             {THREAD_FRAGMENT}
+                        }}
+                        pageInfo {{
+                            hasNextPage
+                            endCursor
                         }}
                     }}
                 }}
@@ -270,27 +279,41 @@ class GraphQLClient:
         }}
         """
 
-        variables = {
-            "owner": owner,
-            "repo": repo,
-            "number": pr_number
-        }
+        all_threads = []
+        cursor = None
 
-        data, errors = self.execute_query(query, variables)
+        while True:
+            variables = {
+                "owner": owner,
+                "repo": repo,
+                "number": pr_number,
+                "cursor": cursor
+            }
 
-        if errors:
-            error_msg = "; ".join(err.message for err in errors)
-            return None, error_msg
+            data, errors = self.execute_query(query, variables)
 
-        if not data:
-            return None, "No data returned from API"
+            if errors:
+                error_msg = "; ".join(err.message for err in errors)
+                return None, error_msg
 
-        try:
-            threads = data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
-            return threads, None
-        except (KeyError, TypeError) as e:
-            logger.error(f"Unexpected response structure: {e}")
-            return None, f"Unexpected response format: {str(e)}"
+            if not data:
+                return None, "No data returned from API"
+
+            try:
+                review_threads = data["repository"]["pullRequest"]["reviewThreads"]
+                threads = review_threads["nodes"]
+                all_threads.extend(threads)
+
+                page_info = review_threads["pageInfo"]
+                if not page_info["hasNextPage"]:
+                    break
+                cursor = page_info["endCursor"]
+
+            except (KeyError, TypeError) as e:
+                logger.error(f"Unexpected response structure: {e}")
+                return None, f"Unexpected response format: {str(e)}"
+
+        return all_threads, None
 
     def get_pr_suggestions(
         self,
@@ -317,13 +340,17 @@ class GraphQLClient:
             return None, "PR number must be a positive integer"
 
         query = f"""
-        query GetPRSuggestions($owner: String!, $repo: String!, $number: Int!) {{
+        query GetPRSuggestions($owner: String!, $repo: String!, $number: Int!, $cursor: String) {{
             repository(owner: $owner, name: $repo) {{
                 pullRequest(number: $number) {{
-                    reviewComments(first: 100) {{
+                    reviewComments(first: 100, after: $cursor) {{
                         nodes {{
                             {SUGGESTION_FRAGMENT}
                             hasSuggestion: body
+                        }}
+                        pageInfo {{
+                            hasNextPage
+                            endCursor
                         }}
                     }}
                 }}
@@ -331,32 +358,47 @@ class GraphQLClient:
         }}
         """
 
-        variables = {
-            "owner": owner,
-            "repo": repo,
-            "number": pr_number
-        }
+        all_suggestions = []
+        cursor = None
 
-        data, errors = self.execute_query(query, variables)
+        while True:
+            variables = {
+                "owner": owner,
+                "repo": repo,
+                "number": pr_number,
+                "cursor": cursor
+            }
 
-        if errors:
-            error_msg = "; ".join(err.message for err in errors)
-            return None, error_msg
+            data, errors = self.execute_query(query, variables)
 
-        if not data:
-            return None, "No data returned from API"
+            if errors:
+                error_msg = "; ".join(err.message for err in errors)
+                return None, error_msg
 
-        try:
-            comments = data["repository"]["pullRequest"]["reviewComments"]["nodes"]
-            # Filter for comments with suggestions (contain "```suggestion")
-            suggestions = [
-                comment for comment in comments
-                if "```suggestion" in comment.get("hasSuggestion", "")
-            ]
-            return suggestions, None
-        except (KeyError, TypeError) as e:
-            logger.error(f"Unexpected response structure: {e}")
-            return None, f"Unexpected response format: {str(e)}"
+            if not data:
+                return None, "No data returned from API"
+
+            try:
+                review_comments = data["repository"]["pullRequest"]["reviewComments"]
+                comments = review_comments["nodes"]
+
+                # Filter for comments with suggestions (contain "```suggestion")
+                suggestions = [
+                    comment for comment in comments
+                    if "```suggestion" in comment.get("hasSuggestion", "")
+                ]
+                all_suggestions.extend(suggestions)
+
+                page_info = review_comments["pageInfo"]
+                if not page_info["hasNextPage"]:
+                    break
+                cursor = page_info["endCursor"]
+
+            except (KeyError, TypeError) as e:
+                logger.error(f"Unexpected response structure: {e}")
+                return None, f"Unexpected response format: {str(e)}"
+
+        return all_suggestions, None
 
     def check_permissions(self, owner: str, repo: str) -> Dict[str, bool]:
         """
