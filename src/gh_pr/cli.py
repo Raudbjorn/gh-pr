@@ -385,7 +385,6 @@ def _launch_tui(cfg: CLIConfig) -> None:
 
         # Create mock config object
         from types import SimpleNamespace
-        tui_config_obj = SimpleNamespace(**tui_config)
 
         # Initialize PR Manager
         from .core.pr_manager import PRManager
