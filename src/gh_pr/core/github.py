@@ -111,7 +111,7 @@ class GitHubClient:
             "draft": pr.draft,
             "mergeable": pr.mergeable,
             "labels": [label.name for label in pr.labels],
-        } for pr in list(repository.get_pulls(state="open"))[:limit]]
+        } for pr in repository.get_pulls(state="open")[:limit]]
 
     def get_pr_reviews(
         self, owner: str, repo: str, pr_number: int
