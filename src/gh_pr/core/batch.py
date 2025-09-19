@@ -343,13 +343,12 @@ class BatchOperations:
                     all_errors.append(f"PR #{result.pr_number}: {error}")
 
         return BatchSummary(
-            total=len(results),
+            total_prs=len(results),
             successful=successful,
             failed=failed,
-            total_items=total_items,
+            total_items_processed=total_items,
             total_duration=total_duration,
-            errors=all_errors,
-            item_description=item_description
+            errors=all_errors
         )
 
     def _create_summary(self, results: list[BatchResult], item_description: str) -> BatchSummary:

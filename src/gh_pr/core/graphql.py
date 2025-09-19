@@ -2,17 +2,40 @@
 
 import json
 import logging
+import re
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from github import GithubException
 
 logger = logging.getLogger(__name__)
 
 # GraphQL API constants
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+DEFAULT_TIMEOUT = 30
 RATE_LIMIT_DELAY = 1.0  # seconds
+
+# GraphQL query fragments for reuse
+THREAD_FRAGMENT = """
+    id
+    isResolved
+    isOutdated
+    comments(first: 1) {
+        nodes {
+            body
+            createdAt
+        }
+    }
+"""
+
+SUGGESTION_FRAGMENT = """
+    id
+    body
+    author {
+        login
+    }
+    createdAt
+"""
 
 
 @dataclass
@@ -20,15 +43,16 @@ class GraphQLError:
     """Represents a GraphQL error."""
     message: str
     type: str
-    locations: Optional[list[dict[str, Any]]] = None
-    path: Optional[list[str]] = None
+    path: Optional[List[str]] = None
+    locations: Optional[List[Dict[str, Any]]] = None
+    extensions: Optional[Dict[str, Any]] = None
 
 
 @dataclass
 class GraphQLResult:
     """Result of a GraphQL operation."""
-    data: Optional[dict[str, Any]] = None
-    errors: Optional[list[GraphQLError]] = None
+    data: Optional[Dict[str, Any]] = None
+    errors: Optional[List[GraphQLError]] = None
     success: bool = True
 
     def __post_init__(self):
@@ -58,7 +82,7 @@ class GraphQLClient:
             "User-Agent": "gh-pr/0.1.0"
         })
 
-    def execute(self, query: str, variables: Optional[dict[str, Any]] = None) -> GraphQLResult:
+    def execute(self, query: str, variables: Optional[Dict[str, Any]] = None) -> GraphQLResult:
         """
         Execute a GraphQL query or mutation.
 
@@ -69,6 +93,12 @@ class GraphQLClient:
         Returns:
             GraphQLResult with data or errors
         """
+        # Input validation
+        if not query or not query.strip():
+            return GraphQLResult(
+                errors=[GraphQLError("Query cannot be empty", "INVALID_INPUT")]
+            )
+
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
@@ -77,7 +107,7 @@ class GraphQLClient:
             response = self.session.post(
                 GITHUB_GRAPHQL_URL,
                 json=payload,
-                timeout=30
+                timeout=DEFAULT_TIMEOUT
             )
 
             if response.status_code == 401:
@@ -104,7 +134,8 @@ class GraphQLClient:
                         message=err.get("message", "Unknown error"),
                         type=err.get("type", "GRAPHQL_ERROR"),
                         locations=err.get("locations"),
-                        path=err.get("path")
+                        path=err.get("path"),
+                        extensions=err.get("extensions")
                     )
                     for err in result["errors"]
                 ]
@@ -145,6 +176,12 @@ class GraphQLClient:
                 errors=[GraphQLError("Thread ID is required", "INVALID_INPUT")]
             )
 
+        # Security: Validate thread_id format (base64 encoded GitHub ID)
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', thread_id.strip()):
+            return GraphQLResult(
+                errors=[GraphQLError("Invalid thread ID format", "INVALID_INPUT")]
+            )
+
         mutation = """
         mutation ResolveReviewThread($threadId: ID!) {
             resolveReviewThread(input: {threadId: $threadId}) {
@@ -172,6 +209,12 @@ class GraphQLClient:
         if not suggestion_id or not suggestion_id.strip():
             return GraphQLResult(
                 errors=[GraphQLError("Suggestion ID is required", "INVALID_INPUT")]
+            )
+
+        # Security: Validate suggestion_id format (base64 encoded GitHub ID)
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', suggestion_id.strip()):
+            return GraphQLResult(
+                errors=[GraphQLError("Invalid suggestion ID format", "INVALID_INPUT")]
             )
 
         mutation = """
@@ -426,6 +469,9 @@ class GraphQLClient:
             repository(owner: $owner, name: $repo) {
                 viewerPermission
                 viewerCanCreatePullRequest
+                viewerCanAdminister
+                viewerCanResolveThreads: viewerCanAdminister
+                viewerCanAcceptSuggestions: viewerCanAdminister
             }
             viewer {
                 login
@@ -438,3 +484,23 @@ class GraphQLClient:
             "repo": repo.strip()
         }
         return self.execute(query, variables)
+
+    # Compatibility methods for gradual migration
+    def execute_query(
+        self,
+        query: str,
+        variables: Optional[Dict[str, Any]] = None
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[List[GraphQLError]]]:
+        """
+        Legacy method for backward compatibility.
+        Execute a GraphQL query.
+
+        Args:
+            query: GraphQL query string
+            variables: Query variables
+
+        Returns:
+            Tuple of (data, errors) where data is the result and errors is a list of GraphQLError
+        """
+        result = self.execute(query, variables)
+        return result.data, result.errors
