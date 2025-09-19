@@ -398,7 +398,7 @@ class TestTokenMetadata:
         result = manager.store_token_metadata()
 
         assert result is True
-        stored_value = config.get("tokens.ghp_classi")
+        stored_value = config.get("tokens.ghp_classic")
         assert stored_value is not None
         assert stored_value.get("type") == "Classic Personal Access Token"
 
