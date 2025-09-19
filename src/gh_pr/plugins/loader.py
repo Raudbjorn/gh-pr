@@ -154,13 +154,32 @@ class PluginLoader:
         Returns:
             Plugin instance or None
         """
-        # Load module dynamically
-        spec = importlib.util.spec_from_file_location(name, path)
+        # Load module dynamically with proper package handling
+        # Use the parent directory as the package location for relative imports
+        if path.parent != Path('.'):
+            spec = importlib.util.spec_from_file_location(
+                name,
+                path,
+                submodule_search_locations=[str(path.parent)]
+            )
+        else:
+            spec = importlib.util.spec_from_file_location(name, path)
+
         if not spec or not spec.loader:
             raise ImportError(f"Cannot load module from {path}")
 
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
+
+        # Set up proper package structure for relative imports
+        if '.' in name:
+            parent_name = name.rsplit('.', 1)[0]
+            if parent_name not in sys.modules:
+                # Create parent package placeholder
+                parent_module = type(sys)('module')
+                parent_module.__path__ = [str(path.parent)]
+                sys.modules[parent_name] = parent_module
+
         spec.loader.exec_module(module)
 
         # Find Plugin subclass in module
@@ -198,11 +217,9 @@ class PluginLoader:
         if not main_file.exists():
             raise FileNotFoundError(f"No plugin.py or __init__.py found in {path}")
 
-        # Add plugin directory to path for imports
-        if str(path.parent) not in sys.path:
-            sys.path.insert(0, str(path.parent))
-
-        return self._load_python_plugin(name, main_file)
+        # Use package name for proper imports without modifying sys.path
+        package_name = f"{name}.{main_file.stem}" if main_file.name == 'plugin.py' else name
+        return self._load_python_plugin(package_name, main_file)
 
     def load_all_plugins(self) -> Dict[str, Plugin]:
         """

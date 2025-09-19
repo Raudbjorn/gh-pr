@@ -16,7 +16,11 @@ from pathlib import Path
 import secrets
 
 from aiohttp import web
-import aiohttp_cors
+try:
+    import aiohttp_cors
+    HAS_CORS = True
+except ImportError:
+    HAS_CORS = False
 
 from .events import WebhookEvent, EventType
 from .handlers import WebhookHandler
@@ -74,7 +78,10 @@ class WebhookServer:
             client_max_size=MAX_PAYLOAD_SIZE
         )
         self._setup_routes()
-        self._setup_cors()
+        if HAS_CORS:
+            self._setup_cors()
+        else:
+            logger.warning("aiohttp_cors not installed, CORS support disabled")
         self._rate_limiter: Dict[str, List[float]] = {}
 
     def _setup_routes(self) -> None:
@@ -85,6 +92,9 @@ class WebhookServer:
 
     def _setup_cors(self) -> None:
         """Configure CORS for web integrations."""
+        if not HAS_CORS:
+            return
+
         cors = aiohttp_cors.setup(self.app, defaults={
             "*": aiohttp_cors.ResourceOptions(
                 allow_credentials=True,

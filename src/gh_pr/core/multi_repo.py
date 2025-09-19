@@ -348,7 +348,7 @@ class MultiRepoManager:
 
         try:
             # Use GitHub search API
-            issues = self.github_client._github.search_issues(
+            issues = self.github_client.github.search_issues(
                 query=full_query,
                 sort='updated',
                 order='desc'

@@ -839,12 +839,6 @@ class TestExportManagerEdgeCases:
         ]
 
         # Should handle None and empty values gracefully
-        summary = BatchSummary(
-            total_prs=len(batch_results),
-            successful=sum(1 for r in batch_results if r.get("success", False)),
-            failed=len(batch_results) - sum(1 for r in batch_results if r.get("success", False))
-        )
-
         content = self.export_manager._export_batch_markdown(batch_results)
         assert "### PR #123" in content
         assert "### PR #124" in content

@@ -1,6 +1,7 @@
 """Batch operations for multiple PRs."""
 
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -80,6 +81,8 @@ class BatchOperations:
         self.pr_manager = pr_manager
         self.rate_limit = DEFAULT_RATE_LIMIT
         self.max_concurrent = MAX_CONCURRENT_OPERATIONS
+        self._rate_lock = threading.Lock()
+        self._last_start = 0.0
 
     def set_rate_limit(self, seconds: float) -> None:
         """
@@ -170,10 +173,6 @@ class BatchOperations:
 
                     progress.advance(task)
 
-                    # Rate limiting
-                    if self.rate_limit > 0:
-                        time.sleep(self.rate_limit)
-
         return results
 
     def _execute_single_operation(
@@ -195,6 +194,15 @@ class BatchOperations:
         Returns:
             BatchResult with operation outcome
         """
+        # Global rate limiting before execution
+        if self.rate_limit > 0:
+            with self._rate_lock:
+                now = time.monotonic()
+                elapsed = now - self._last_start
+                if elapsed < self.rate_limit:
+                    time.sleep(self.rate_limit - elapsed)
+                self._last_start = time.monotonic()
+
         start_time = time.time()
 
         try:
@@ -223,7 +231,7 @@ class BatchOperations:
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Operation failed for PR {owner}/{repo}#{pr_number}: {e}")
+            logger.exception(f"Operation failed for PR {owner}/{repo}#{pr_number}: {e}")
             return BatchResult(
                 pr_number=pr_number,
                 success=False,

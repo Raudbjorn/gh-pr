@@ -98,12 +98,13 @@ class TestCrossRepoPR(unittest.TestCase):
         self.assertTrue(cross_pr2.has_cross_references())
 
 
-class TestMultiRepoManager(unittest.TestCase):
+class TestMultiRepoManager(unittest.IsolatedAsyncioTestCase):
     """Test multi-repository manager."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.mock_github_client = Mock()
+        self.mock_github_client.github = Mock()  # Add public github attribute
         self.mock_cache = Mock()
         self.manager = MultiRepoManager(
             self.mock_github_client,
@@ -259,7 +260,7 @@ class TestMultiRepoManager(unittest.TestCase):
         self.manager._get_repo_client = Mock(return_value=mock_repo_client)
 
         # Mock async task
-        with patch.object(self.manager, '_get_repo_prs') as mock_get_prs:
+        with patch.object(self.manager, '_get_repo_prs', new_callable=AsyncMock) as mock_get_prs:
             mock_get_prs.return_value = [Mock(title="PR1")]
 
             result = await self.manager.get_all_prs(state='open')
@@ -273,19 +274,28 @@ class TestMultiRepoManager(unittest.TestCase):
         repo1 = RepoConfig(owner="user1", name="repo1")
         self.manager.add_repository(repo1)
 
-        # Mock GitHub search
+        # Mock GitHub search with proper structure
+        mock_pr = Mock()
+        mock_pr.title = "Found PR"
+        mock_pr.body = "This is a test PR"  # Body needs to be a string for regex
         mock_issue = Mock()
-        mock_issue.pull_request = True
-        mock_issue.repository.full_name = "user1/repo1"
-        mock_issue.as_pull_request.return_value = Mock(title="Found PR")
+        mock_issue.pull_request = {'url': 'test'}  # Make it truthy but not just True
+        mock_repository = Mock()
+        mock_repository.full_name = "user1/repo1"
+        mock_issue.repository = mock_repository
+        mock_issue.as_pull_request.return_value = mock_pr
 
-        self.mock_github_client._github.search_issues.return_value = [mock_issue]
+        # Make search_issues return an iterable
+        mock_search_result = Mock()
+        mock_search_result.__iter__ = Mock(return_value=iter([mock_issue]))
+        mock_search_result.__getitem__ = Mock(side_effect=lambda x: [mock_issue][x])
+        self.mock_github_client.github.search_issues.return_value = mock_search_result
 
         results = await self.manager.search_prs("test query")
 
         self.assertEqual(len(results), 1)
         self.assertIsInstance(results[0], CrossRepoPR)
-        self.mock_github_client._github.search_issues.assert_called_once()
+        self.mock_github_client.github.search_issues.assert_called_once()
 
     async def test_get_pr_graph(self):
         """Test building PR relationship graph."""

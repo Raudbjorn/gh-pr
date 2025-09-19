@@ -278,7 +278,7 @@ class TestPluginManager(unittest.TestCase):
         self.assertEqual(len(notif_plugins), 1)
         self.assertEqual(notif_plugins[0], plugin2)
 
-    async def test_dispatch_pr_event(self):
+    def test_dispatch_pr_event(self):
         """Test PR event dispatch to plugins."""
         # Create mock PR event plugin
         plugin = Mock(spec=PREventPlugin)
@@ -295,12 +295,12 @@ class TestPluginManager(unittest.TestCase):
 
         # Dispatch event
         event = {'type': 'pull_request', 'action': 'opened'}
-        results = await self.manager.dispatch_pr_event(event)
+        results = asyncio.run(self.manager.dispatch_pr_event(event))
 
         plugin.handle_pr_event.assert_called_once_with(event)
         self.assertEqual(results['pr-handler'], {'handled': True})
 
-    async def test_send_notification(self):
+    def test_send_notification(self):
         """Test notification dispatch to plugins."""
         # Create mock notification plugin
         plugin = Mock(spec=NotificationPlugin)
@@ -316,13 +316,17 @@ class TestPluginManager(unittest.TestCase):
         self.manager._capability_registry[PluginCapability.NOTIFICATION] = [plugin]
 
         # Send notification
-        results = await self.manager.send_notification(
+        results = asyncio.run(self.manager.send_notification(
+            "Test Title",
+            "Test Message",
+            urgency="high"
+        ))
+
+        plugin.send_notification.assert_awaited_once_with(
             "Test Title",
             "Test Message",
             urgency="high"
         )
-
-        plugin.send_notification.assert_called_once()
         self.assertEqual(results['notifier'], True)
 
     def test_enable_disable_plugin(self):
@@ -330,6 +334,13 @@ class TestPluginManager(unittest.TestCase):
         plugin = Mock()
         plugin.enable = Mock()
         plugin.disable = Mock()
+        plugin.is_enabled = Mock(return_value=True)
+        plugin.get_metadata = Mock(return_value=PluginMetadata(
+            name="test",
+            version="1.0.0",
+            description="Test",
+            capabilities=set()
+        ))
 
         self.manager.loader._loaded_plugins['test'] = plugin
 
