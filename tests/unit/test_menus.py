@@ -133,6 +133,38 @@ class TestActionMenu:
         # Callback should not be called
         callback.assert_not_called()
 
+    def test_action_menu_no_button_id(self):
+        """Test handling button with no ID."""
+        callback = Mock()
+        menu = ActionMenu(on_action=callback)
+
+        # Create mock event with no button ID
+        mock_button = Mock()
+        mock_button.id = None
+        mock_event = Mock()
+        mock_event.button = mock_button
+
+        # Should not raise exception
+        menu.on_button_pressed(mock_event)
+        # Callback should not be called
+        callback.assert_not_called()
+
+    def test_action_menu_malformed_button_id(self):
+        """Test handling malformed button ID."""
+        callback = Mock()
+        menu = ActionMenu(on_action=callback)
+
+        # Create mock event with malformed button ID
+        mock_button = Mock()
+        mock_button.id = "not_action_prefix"
+        mock_event = Mock()
+        mock_event.button = mock_button
+
+        # Should not raise exception
+        menu.on_button_pressed(mock_event)
+        # Callback should not be called
+        callback.assert_not_called()
+
 
 class TestFilterOptionsMenu:
     """Test the FilterOptionsMenu widget."""
@@ -200,6 +232,51 @@ class TestFilterOptionsMenu:
         message = mock_post_message.call_args[0][0]
         assert message.filters["status"] == "resolved"
 
+    def test_filter_invalid_radio_set(self):
+        """Test handling unknown radio set ID."""
+        menu = FilterOptionsMenu()
+        original_filters = menu.filters.copy()
+
+        # Mock radio set event with unknown ID
+        mock_radio_set = Mock()
+        mock_radio_set.id = "unknown_radio_set"
+        mock_event = Mock()
+        mock_event.radio_set = mock_radio_set
+        mock_event.value = "some_value"
+
+        # Should not raise exception and filters should remain unchanged
+        menu.on_radio_set_changed(mock_event)
+        assert menu.filters == original_filters
+
+    def test_filter_invalid_switch(self):
+        """Test handling unknown switch ID."""
+        menu = FilterOptionsMenu()
+        original_filters = menu.filters.copy()
+
+        # Mock switch event with unknown ID
+        mock_switch = Mock()
+        mock_switch.id = "unknown_switch"
+        mock_event = Mock()
+        mock_event.switch = mock_switch
+        mock_event.value = True
+
+        # Should not raise exception and filters should remain unchanged
+        menu.on_switch_changed(mock_event)
+        assert menu.filters == original_filters
+
+    def test_filter_invalid_button(self):
+        """Test handling unknown button ID."""
+        menu = FilterOptionsMenu()
+
+        # Mock button event with unknown ID
+        mock_button = Mock()
+        mock_button.id = "unknown_button"
+        mock_event = Mock()
+        mock_event.button = mock_button
+
+        # Should not raise exception
+        menu.on_button_pressed(mock_event)
+
 
 class TestSortOptionsMenu:
     """Test the SortOptionsMenu widget."""
@@ -261,6 +338,38 @@ class TestSortOptionsMenu:
         assert message.sort_by == "author"
         assert message.ascending is False
 
+    def test_sort_invalid_radio_set(self):
+        """Test handling unknown radio set ID."""
+        menu = SortOptionsMenu()
+        original_sort = menu.current_sort
+
+        # Mock radio set event with unknown ID
+        mock_radio_set = Mock()
+        mock_radio_set.id = "unknown_sort_field"
+        mock_event = Mock()
+        mock_event.radio_set = mock_radio_set
+        mock_event.value = "invalid_value"
+
+        # Should not raise exception and sort should remain unchanged
+        menu.on_radio_set_changed(mock_event)
+        assert menu.current_sort == original_sort
+
+    def test_sort_invalid_switch(self):
+        """Test handling unknown switch ID."""
+        menu = SortOptionsMenu()
+        original_ascending = menu.ascending
+
+        # Mock switch event with unknown ID
+        mock_switch = Mock()
+        mock_switch.id = "unknown_switch"
+        mock_event = Mock()
+        mock_event.switch = mock_switch
+        mock_event.value = False
+
+        # Should not raise exception and ascending should remain unchanged
+        menu.on_switch_changed(mock_event)
+        assert menu.ascending == original_ascending
+
 
 class TestExportMenu:
     """Test the ExportMenu widget."""
@@ -288,27 +397,28 @@ class TestExportMenu:
         menu.on_radio_set_changed(mock_event)
         assert menu.export_format == "json"
 
-    def test_export_options_change(self):
+    @pytest.mark.parametrize("switch_id,value", [
+        ("include_code", False),
+        ("include_resolved", True),
+        ("include_outdated", True),
+        ("include_metadata", False),
+    ])
+    def test_export_options_change(self, switch_id, value):
         """Test handling export option changes."""
         menu = ExportMenu()
 
-        # Mock switch events
-        test_cases = [
-            ("include_code", False),
-            ("include_resolved", True),
-            ("include_outdated", True),
-            ("include_metadata", False),
-        ]
+        mock_switch = Mock()
+        mock_switch.id = switch_id
+        mock_event = Mock()
+        mock_event.switch = mock_switch
+        mock_event.value = value
 
-        for switch_id, value in test_cases:
-            mock_switch = Mock()
-            mock_switch.id = switch_id
-            mock_event = Mock()
-            mock_event.switch = mock_switch
-            mock_event.value = value
+        menu.on_switch_changed(mock_event)
+        assert menu.options[switch_id] == value
 
-            menu.on_switch_changed(mock_event)
-            assert menu.options[switch_id] == value
+    def test_export_invalid_switch(self):
+        """Test handling invalid switch ID."""
+        menu = ExportMenu()
 
         # Test invalid switch id
         invalid_switch_id = "invalid_option"

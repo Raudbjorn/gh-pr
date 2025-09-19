@@ -156,88 +156,10 @@ class ThemeManager:
         Returns:
             ColorScheme instance
         """
-        if theme_name == "default":
-            return ColorScheme()
-        elif theme_name == "dark":
-            return ColorScheme(
-                primary="#0D6EFD",
-                bg_primary="#0D1117",
-                bg_secondary="#161B22",
-                bg_surface="#21262D",
-                text_primary="#C9D1D9",
-                text_secondary="#8B949E",
-                border="#30363D",
-                highlight="#1F6FEB",
-            )
-        elif theme_name == "light":
-            return ColorScheme(
-                primary="#0969DA",
-                bg_primary="#FFFFFF",
-                bg_secondary="#F6F8FA",
-                bg_surface="#FFFFFF",
-                text_primary="#24292F",
-                text_secondary="#57606A",
-                text_muted="#6E7781",
-                border="#D0D7DE",
-                highlight="#DDF4FF",
-                pr_open="#1A7F37",
-                pr_closed="#CF222E",
-                pr_merged="#8250DF",
-            )
-        elif theme_name == "monokai":
-            return ColorScheme(
-                primary="#66D9EF",
-                secondary="#75715E",
-                success="#A6E22E",
-                warning="#E6DB74",
-                error="#F92672",
-                info="#AE81FF",
-                bg_primary="#272822",
-                bg_secondary="#3E3D32",
-                bg_surface="#3E3D32",
-                text_primary="#F8F8F2",
-                text_secondary="#CFCFC2",
-                border="#49483E",
-                highlight="#49483E",
-            )
-        elif theme_name == "dracula":
-            return ColorScheme(
-                primary="#BD93F9",
-                secondary="#6272A4",
-                success="#50FA7B",
-                warning="#F1FA8C",
-                error="#FF5555",
-                info="#8BE9FD",
-                bg_primary="#282A36",
-                bg_secondary="#343746",
-                bg_surface="#44475A",
-                text_primary="#F8F8F2",
-                text_secondary="#BFBFBF",
-                border="#6272A4",
-                highlight="#44475A",
-                link="#8BE9FD",
-            )
-        elif theme_name == "github":
-            return ColorScheme(
-                primary="#0366D6",
-                secondary="#586069",
-                success="#28A745",
-                warning="#FFC107",
-                error="#D73A49",
-                info="#0366D6",
-                bg_primary="#FFFFFF",
-                bg_secondary="#FAFBFC",
-                bg_surface="#F6F8FA",
-                text_primary="#24292E",
-                text_secondary="#586069",
-                text_muted="#6A737D",
-                border="#E1E4E8",
-                highlight="#F6F8FA",
-                link="#0366D6",
-            )
-        else:
-            # Default fallback
-            return ColorScheme()
+        from dataclasses import replace
+        base_theme = self.THEMES.get(theme_name, self.THEMES["default"])
+        # Return a copy to avoid modifying the original
+        return replace(base_theme)
 
     def get_rich_theme(self) -> Theme:
         """Get Rich theme object for terminal rendering.

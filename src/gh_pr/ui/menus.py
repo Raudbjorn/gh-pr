@@ -29,6 +29,14 @@ class MenuAction(Enum):
     HELP = "help"
     QUIT = "quit"
 
+    # Navigation actions
+    NAVIGATE_DOWN = "navigate_down"
+    NAVIGATE_UP = "navigate_up"
+    SELECT = "select"
+    SEARCH = "search"
+    NEXT_PANE = "next_pane"
+    PREV_PANE = "prev_pane"
+
 
 @dataclass
 class MenuItem:

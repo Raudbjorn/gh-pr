@@ -212,14 +212,17 @@ class SearchBar(Widget):
     }
     """
 
-    def __init__(self, on_search: Optional[Callable] = None):
+    def __init__(self, on_search: Optional[Callable] = None, debounce_delay: float = 0.5):
         """Initialize search bar.
 
         Args:
             on_search: Callback when search is triggered
+            debounce_delay: Delay in seconds before triggering search
         """
         super().__init__()
         self.on_search = on_search
+        self.debounce_delay = debounce_delay
+        self._search_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
         """Compose the search bar."""
@@ -236,7 +239,7 @@ class SearchBar(Widget):
         if event.button.id == "search_button":
             search_input = self.query_one("#search_input", Input)
             if self.on_search and search_input.value:
-                self.on_search(search_input.value)
+                asyncio.create_task(self.on_search(search_input.value))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle enter key in search input.
@@ -245,7 +248,42 @@ class SearchBar(Widget):
             event: Input submission event
         """
         if self.on_search and event.value:
-            self.on_search(event.value)
+            # Cancel any pending debounced search
+            if self._search_task and not self._search_task.done():
+                self._search_task.cancel()
+            asyncio.create_task(self.on_search(event.value))
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Handle input value changes for debounced search.
+
+        Args:
+            event: Input change event
+        """
+        if not self.on_search or not event.value.strip():
+            return
+
+        # Cancel previous search task
+        if self._search_task and not self._search_task.done():
+            self._search_task.cancel()
+
+        # Start new debounced search
+        self._search_task = asyncio.create_task(
+            self._debounced_search(event.value.strip())
+        )
+
+    async def _debounced_search(self, query: str) -> None:
+        """Perform debounced search after delay.
+
+        Args:
+            query: Search query
+        """
+        try:
+            await asyncio.sleep(self.debounce_delay)
+            if self.on_search:
+                await self.on_search(query)
+        except asyncio.CancelledError:
+            # Search was cancelled, ignore
+            pass
 
 
 class GhPrTUI(App):
@@ -340,9 +378,11 @@ class GhPrTUI(App):
 
         # Details/filters on right
         with Container(id="details-container"):
-            yield PRDetailsView(id="pr-details")
+            yield PRDetailsView()
             # Filter menu (initially hidden)
             self.filter_menu = FilterMenu(on_filter_change=self.handle_filter_change)
+            self.filter_menu.display = False
+            yield self.filter_menu
 
         yield Footer()
 
@@ -366,9 +406,10 @@ class GhPrTUI(App):
             else:
                 return
 
-            # Load PRs
+            # Load PRs with configured limit
+            pr_limit = self.config_manager.get("github.pr_limit", 50)
             self.prs = await asyncio.to_thread(
-                self.github_client.get_open_prs, owner, repo, limit=50
+                self.github_client.get_open_prs, owner, repo, limit=pr_limit
             )
 
             # Update list
@@ -412,7 +453,7 @@ class GhPrTUI(App):
             self.current_pr = pr_data
             self.current_comments = comments
 
-            details_view = self.query_one("#pr-details", PRDetailsView)
+            details_view = self.query_one(PRDetailsView)
             details_view.update_pr(pr_data, comments)
 
             self.notify(f"Loaded PR #{pr_number}", severity="information")
@@ -429,7 +470,7 @@ class GhPrTUI(App):
         self.filter_mode = filter_mode
 
         # Update details view
-        details_view = self.query_one("#pr-details", PRDetailsView)
+        details_view = self.query_one(PRDetailsView)
         details_view.update_filter(filter_mode)
 
         # Reload comments if PR is selected
@@ -452,7 +493,7 @@ class GhPrTUI(App):
 
             self.current_comments = comments
 
-            details_view = self.query_one("#pr-details", PRDetailsView)
+            details_view = self.query_one(PRDetailsView)
             details_view.update_pr(self.current_pr, comments)
 
         except Exception as e:
@@ -486,16 +527,8 @@ class GhPrTUI(App):
         """Toggle filter menu visibility."""
         self.show_filter_menu = not self.show_filter_menu
 
-        details_container = self.query_one("#details-container")
-
-        if self.show_filter_menu:
-            # Add filter menu
-            if not details_container.query("FilterMenu"):
-                details_container.mount(self.filter_menu)
-        else:
-            # Remove filter menu
-            for menu in details_container.query("FilterMenu"):
-                menu.remove()
+        # Toggle display property instead of mount/unmount
+        self.filter_menu.display = self.show_filter_menu
 
     def action_focus_search(self) -> None:
         """Focus the search input."""

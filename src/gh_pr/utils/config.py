@@ -18,6 +18,7 @@ class ConfigManager:
         "github": {
             "default_token": None,
             "check_token_expiry": True,
+            "pr_limit": 50,
         },
         "display": {
             "default_filter": "unresolved",

@@ -68,6 +68,16 @@ class TestThemeManager:
         # Should fallback to default
         assert manager.color_scheme.primary == "#007ACC"
 
+    @pytest.mark.parametrize("invalid_theme", [
+        "nonexistent", "", "invalid-theme", "123", None, "DARK", "Light"
+    ])
+    def test_invalid_theme_names_fallback(self, invalid_theme):
+        """Test that various invalid theme names fallback to default."""
+        manager = ThemeManager(theme_name=invalid_theme)
+        # Should always fallback to default theme
+        assert manager.color_scheme.primary == "#007ACC"
+        assert manager.color_scheme.bg_primary == "#1E1E1E"
+
     def test_custom_color_overrides(self):
         """Test custom color overrides."""
         custom_colors = {
@@ -158,16 +168,16 @@ class TestThemeManager:
         assert "bg_primary" in color_dict
         assert color_dict["primary"] == "#007ACC"
 
-    def test_all_predefined_themes_valid(self):
+    @pytest.mark.parametrize("theme_name", [
+        "default", "dark", "light", "monokai", "dracula", "github"
+    ])
+    def test_all_predefined_themes_valid(self, theme_name):
         """Test that all predefined themes can be loaded."""
         manager = ThemeManager()
-        themes = manager.get_available_themes()
-
-        for theme_name in themes:
-            manager.switch_theme(theme_name)
-            # Should not raise any exceptions
-            assert manager.current_theme_name == theme_name
-            assert isinstance(manager.color_scheme, ColorScheme)
-            # Test that theme can generate Rich theme
-            rich_theme = manager.get_rich_theme()
-            assert isinstance(rich_theme, Theme)
+        manager.switch_theme(theme_name)
+        # Should not raise any exceptions
+        assert manager.current_theme_name == theme_name
+        assert isinstance(manager.color_scheme, ColorScheme)
+        # Test that theme can generate Rich theme
+        rich_theme = manager.get_rich_theme()
+        assert isinstance(rich_theme, Theme)
