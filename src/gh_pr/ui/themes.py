@@ -355,18 +355,6 @@ class ThemeManager:
             "$focus": cs.primary,
         }
 
-    def apply_to_textual_app(self, app: Any) -> None:
-        """Apply theme to a Textual application.
-
-        Args:
-            app: Textual App instance
-        """
-        css_vars = self.get_textual_css_variables()
-        for var_name, color_value in css_vars.items():
-            # This would require Textual's theming API
-            # For now, we'll prepare the CSS variables
-            pass
-
     def switch_theme(self, theme_name: str) -> None:
         """Switch to a different theme.
 
