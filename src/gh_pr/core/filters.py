@@ -1,5 +1,6 @@
 """Comment filtering logic."""
 
+import fnmatch
 from typing import Any
 
 
@@ -93,8 +94,6 @@ class CommentFilter:
         Returns:
             Filtered list of threads
         """
-        import fnmatch
-
         filtered = []
 
         for thread in threads:

@@ -18,6 +18,37 @@ from .graphql import GraphQLClient
 logger = logging.getLogger(__name__)
 
 
+def _validate_git_repository(directory: Path = None) -> bool:
+    """
+    Validate that the current or specified directory is a git repository.
+
+    Args:
+        directory: Directory to check (defaults to current working directory)
+
+    Returns:
+        True if directory is a git repository, False otherwise
+    """
+    try:
+        check_dir = directory or Path.cwd()
+        # Check if .git directory exists or if we're in a git worktree
+        git_dir = check_dir / ".git"
+        if git_dir.exists():
+            return True
+
+        # Alternative check using git command
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            timeout=5,
+            cwd=check_dir
+        )
+        return result.returncode == 0
+
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+        logger.debug(f"Git repository validation failed: {e}")
+        return False
+
+
 class PRManager:
     """Manages PR operations and business logic."""
 
@@ -127,6 +158,10 @@ class PRManager:
         Returns:
             Tuple of (owner, repo) or None
         """
+        if not _validate_git_repository():
+            logger.debug("Not in a git repository")
+            return None
+
         try:
             # Get remote URL
             result = subprocess.run(
@@ -167,14 +202,11 @@ class PRManager:
         Returns:
             PR identifier or None
         """
+        if not _validate_git_repository():
+            logger.debug("Not in a git repository")
+            return None
+
         try:
-            # Check if we're in a git repo
-            subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
 
             # Get current branch name
             result = subprocess.run(
@@ -248,6 +280,11 @@ class PRManager:
         original_cwd = os.getcwd()
         try:
             os.chdir(directory)
+
+            # Validate git repository in this directory
+            if not _validate_git_repository(directory):
+                logger.debug(f"Directory {directory} is not a git repository")
+                return None
 
             # Get current branch
             result = subprocess.run(

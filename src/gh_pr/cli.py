@@ -22,6 +22,9 @@ from .utils.export import ExportManager
 
 console = Console()
 
+# Constants
+MAX_CONTEXT_LINES = 50  # Maximum number of context lines to show
+
 @dataclass
 class CLIConfig:
     """Configuration for CLI command."""
@@ -86,7 +89,7 @@ class CLIConfig:
     "-c", "--context",
     default=3,
     help="Number of context lines to show (default: 3)",
-    type=click.IntRange(0, 50)  # Prevent negative or huge values
+    type=click.IntRange(0, MAX_CONTEXT_LINES)  # Prevent negative or huge values
 )
 @click.option("--no-code", is_flag=True, help="Don't show code context")
 @click.option("--no-cache", is_flag=True, help="Bypass cache and fetch fresh data")

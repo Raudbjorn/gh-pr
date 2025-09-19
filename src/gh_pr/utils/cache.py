@@ -113,7 +113,7 @@ class CacheManager:
             del self.cache[key]
             return True
         except (KeyError, OSError, AttributeError) as e:
-            logger.debug(f"Cache delete failed for key '{key}': {e}")
+            logger.warning(f"Cache delete failed for key '{key}': {e}")
             return False
 
     def clear(self) -> bool:
@@ -130,7 +130,7 @@ class CacheManager:
             self.cache.clear()
             return True
         except (OSError, AttributeError) as e:
-            logger.debug(f"Cache clear failed: {e}")
+            logger.warning(f"Cache clear failed: {e}")
             return False
 
     def generate_key(self, *parts: str) -> str:

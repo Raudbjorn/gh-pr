@@ -6,19 +6,25 @@ from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+# Constants for API timeouts
+DEFAULT_TIMEOUT = 30  # seconds
+CONNECTION_TIMEOUT = 10  # seconds
+
 
 class GitHubClient:
     """Wrapper for GitHub API operations."""
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, timeout: int = DEFAULT_TIMEOUT):
         """
         Initialize GitHubClient.
 
         Args:
             token: GitHub authentication token
+            timeout: API request timeout in seconds
         """
-        self.github = Github(token)
+        self.github = Github(token, timeout=timeout)
         self._user = None
+        self.timeout = timeout
 
     @property
     def user(self):

@@ -2,7 +2,28 @@
 
 import datetime
 import hashlib
+from functools import lru_cache
 from typing import Any, Optional
+
+
+@lru_cache(maxsize=1000)
+def _parse_datetime_cached(date_string: str) -> datetime.datetime:
+    """
+    Parse datetime string with caching for performance.
+
+    Args:
+        date_string: ISO 8601 datetime string
+
+    Returns:
+        Parsed datetime object, or datetime.max for invalid dates
+    """
+    try:
+        # Handle ISO 8601 format with 'Z' timezone indicator
+        if date_string.endswith('Z'):
+            date_string = date_string[:-1] + '+00:00'
+        return datetime.datetime.fromisoformat(date_string)
+    except (ValueError, AttributeError):
+        return datetime.datetime.max  # Put invalid dates last
 
 
 class CommentProcessor:
@@ -46,18 +67,10 @@ class CommentProcessor:
 
             threads[thread_key]["comments"].append(comment)
 
-        # Sort comments within threads by creation time
+        # Sort comments within threads by creation time using cached parsing
         for thread in threads.values():
-            def parse_created_at(comment):
-                created_at = comment.get("created_at", "")
-                try:
-                    # Try parsing ISO 8601 format, fallback to empty string
-                    return datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    return datetime.datetime.max  # Put comments with invalid/missing dates last
-
             thread["comments"].sort(
-                key=parse_created_at,
+                key=lambda comment: _parse_datetime_cached(comment.get("created_at", "")),
             )
 
         return list(threads.values())

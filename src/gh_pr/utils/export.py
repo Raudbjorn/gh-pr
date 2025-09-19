@@ -3,6 +3,7 @@
 import csv
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from statistics import mean, median
@@ -10,6 +11,53 @@ from typing import Any, Optional
 
 
 logger = logging.getLogger(__name__)
+
+# Constants for filename sanitization
+INVALID_FILENAME_CHARS = r'[<>:"/\\|?*\x00-\x1f]'
+MAX_FILENAME_LENGTH = 200
+RESERVED_NAMES = {
+    'CON', 'PRN', 'AUX', 'NUL',
+    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+}
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename to prevent overwriting system files and path traversal.
+
+    Args:
+        filename: Original filename
+
+    Returns:
+        Sanitized filename safe for filesystem use
+    """
+    # Remove or replace invalid characters
+    sanitized = re.sub(INVALID_FILENAME_CHARS, '_', filename)
+
+    # Remove leading/trailing dots and spaces
+    sanitized = sanitized.strip('. ')
+
+    # Handle reserved names
+    name_without_ext = sanitized.split('.')[0].upper()
+    if name_without_ext in RESERVED_NAMES:
+        sanitized = f"export_{sanitized}"
+
+    # Prevent empty filenames
+    if not sanitized or sanitized.startswith('.'):
+        sanitized = f"export_{sanitized}" if sanitized else "export_file"
+
+    # Truncate if too long, preserving extension
+    if len(sanitized) > MAX_FILENAME_LENGTH:
+        parts = sanitized.rsplit('.', 1)
+        if len(parts) == 2:
+            name, ext = parts
+            max_name_len = MAX_FILENAME_LENGTH - len(ext) - 1
+            sanitized = f"{name[:max_name_len]}.{ext}"
+        else:
+            sanitized = sanitized[:MAX_FILENAME_LENGTH]
+
+    return sanitized
 
 
 class ExportManager:
@@ -34,6 +82,7 @@ class ExportManager:
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"pr_{pr_data['number']}_{timestamp}.{self._get_extension(format)}"
+        filename = _sanitize_filename(filename)
 
         if format == "markdown":
             content = self._export_markdown(pr_data, comments)
@@ -178,6 +227,7 @@ class ExportManager:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"batch_report_{timestamp}.{self._get_extension(output_format)}"
+        filename = _sanitize_filename(filename)
 
         if output_format == "markdown":
             content = self._export_batch_markdown(batch_results)
@@ -220,6 +270,7 @@ class ExportManager:
         stats = self._calculate_review_statistics(pr_data_list)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"review_stats_{timestamp}.{self._get_extension(output_format)}"
+        filename = _sanitize_filename(filename)
 
         if output_format == "markdown":
             content = self._export_stats_markdown(stats)
@@ -260,6 +311,7 @@ class ExportManager:
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"pr_{pr_data['number']}_enhanced_{timestamp}.csv"
+        filename = _sanitize_filename(filename)
 
         if include_all_fields:
             content = self._export_enhanced_csv_all_fields(pr_data, comments)
