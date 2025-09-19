@@ -179,17 +179,33 @@ class FilterOptionsMenu(Widget):
         # Comment status filter
         yield Label("Status:")
         with RadioSet(id="filter_status"):
-            yield RadioButton("All Comments", value="all")
-            yield RadioButton("Unresolved Only", value="unresolved")
-            yield RadioButton("Resolved Only", value="resolved")
+            yield RadioButton("All Comments", id="status_all", value=True)
+            yield RadioButton("Unresolved Only", id="status_unresolved")
+            yield RadioButton("Resolved Only", id="status_resolved")
 
         # Comment location filter
         yield Label("Location:")
         with RadioSet(id="filter_location"):
-            yield RadioButton("All Locations", value="all")
-            yield RadioButton("Current Code", value="current")
-            yield RadioButton("Outdated Code", value="outdated")
+            yield RadioButton("All Locations", id="loc_all", value=True)
+            yield RadioButton("Current Code", id="loc_current")
+            yield RadioButton("Outdated Code", id="loc_outdated")
 
+        if event.radio_set.id == "filter_status":
+            pressed = getattr(event, "pressed", None)
+            if pressed:
+                self.filters["status"] = {
+                    "status_all": "all",
+                    "status_unresolved": "unresolved",
+                    "status_resolved": "resolved",
+                }.get(pressed.id, self.filters["status"])
+        elif event.radio_set.id == "filter_location":
+            pressed = getattr(event, "pressed", None)
+            if pressed:
+                self.filters["location"] = {
+                    "loc_all": "all",
+                    "loc_current": "current",
+                    "loc_outdated": "outdated",
+                }.get(pressed.id, self.filters["location"])
         # Additional filters
         yield Label("Additional Filters:")
         yield Switch("Has Suggestions", id="filter_suggestions")
