@@ -370,7 +370,7 @@ class TokenManager:
 
         try:
             # Store token metadata using first 10 chars as key
-            token_key = self.token[:10] if len(self.token) > 10 else self.token
+            token_key = hashlib.sha256(self.token.encode()).hexdigest()[:16]
 
             metadata = {
                 "type": self.get_token_info().get("type", "Unknown"),
