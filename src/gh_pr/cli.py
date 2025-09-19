@@ -25,6 +25,7 @@ class CLIConfig:
     """Configuration for CLI command."""
     pr_identifier: Optional[str] = None
     interactive: bool = False
+    tui: bool = False
     repo: Optional[str] = None
     token: Optional[str] = None
     show_all: bool = False
@@ -48,6 +49,9 @@ class CLIConfig:
 @click.argument("pr_identifier", required=False)
 @click.option(
     "-i", "--interactive", is_flag=True, help="Show interactive list of all open PRs to choose from"
+)
+@click.option(
+    "--tui", is_flag=True, help="Launch interactive TUI mode (Terminal User Interface)"
 )
 @click.option(
     "-r", "--repo", help="Specify the repository (default: current repo)", metavar="OWNER/REPO"
@@ -105,6 +109,7 @@ def main(**kwargs) -> None:
     Examples:
         gh-pr                        # Auto-detect PR from current/sub directories
         gh-pr -i                     # Interactive mode - choose from all open PRs
+        gh-pr --tui                  # Launch interactive TUI mode
         gh-pr 53
         gh-pr https://github.com/owner/repo/pull/53
         gh-pr --unresolved-outdated  # Auto-detect PR, show likely fixed issues
@@ -114,6 +119,11 @@ def main(**kwargs) -> None:
     """
     # Create config from kwargs
     cfg = CLIConfig(**kwargs)
+
+    # Launch TUI mode if requested
+    if cfg.tui:
+        _launch_tui(cfg)
+        return
 
     try:
         # Initialize services
@@ -342,6 +352,61 @@ def _handle_output(
             console.print("[green]✓ Copied to clipboard (plain text)[/green]")
         else:
             console.print("[yellow]⚠ Could not copy to clipboard[/yellow]")
+
+
+def _launch_tui(cfg: CLIConfig) -> None:
+    """Launch the interactive TUI mode."""
+    try:
+        from .ui.interactive import GhPrTUI
+
+        # Initialize services
+        result = _initialize_services(
+            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
+        )
+        if result is None:
+            return  # Cache was cleared
+        config_manager, cache_manager, token_manager = result
+
+        # Initialize GitHub client
+        github_client = GitHubClient(token_manager.get_token())
+
+        # Create TUI configuration
+        tui_config = {
+            "github_token": token_manager.get_token(),
+            "default_repo": cfg.repo or config_manager.get("default_repo"),
+            "cache_ttl": config_manager.get("cache.ttl", 300),
+            "theme": config_manager.get("ui.theme", "default"),
+            "tui_settings": {
+                "auto_refresh": config_manager.get("tui.auto_refresh", False),
+                "refresh_interval": config_manager.get("tui.refresh_interval", 60),
+                "show_drafts": config_manager.get("tui.show_drafts", True),
+            }
+        }
+
+        # Create mock config object
+        from types import SimpleNamespace
+        tui_config_obj = SimpleNamespace(**tui_config)
+
+        # Launch the TUI
+        app = GhPrTUI(
+            github_service=github_client,
+            cache_service=cache_manager,
+            config=tui_config_obj
+        )
+        app.run()
+
+    except ImportError as e:
+        console.print("[red]✗ TUI mode requires Textual library[/red]")
+        console.print("[dim]Install with: pip install textual[/dim]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]TUI mode interrupted[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"[red]Error launching TUI: {e}[/red]")
+        if cfg.verbose:
+            console.print_exception()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

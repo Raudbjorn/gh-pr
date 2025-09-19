@@ -29,7 +29,7 @@ classifiers = [
 
 dependencies = [
     "click>=8.1.0",
-    "pygithub>=2.1.0",
+    "PyGithub>=2.1.0",
     "rich>=13.0.0",
     "textual>=0.40.0",
     "tomli>=2.0.0; python_version < '3.11'",
@@ -109,7 +109,7 @@ disallow_untyped_decorators = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "--verbose --cov=gh_pr --cov-report=term-missing"
+addopts = "--verbose"
 
 [tool.coverage.run]
 source = ["src/gh_pr"]
