@@ -175,11 +175,11 @@ class TokenManager:
             # Try to get rate limit info (works for all valid tokens)
             try:
                 rate_limit = github.get_rate_limit()
-                rate_limit_core = rate_limit.rate.raw_data.get('core', rate_limit.rate.raw_data)
+                core = rate_limit.core
                 info["rate_limit"] = {
-                    "limit": rate_limit_core.get('limit', 'N/A'),
-                    "remaining": rate_limit_core.get('remaining', 'N/A'),
-                    "reset": datetime.fromtimestamp(rate_limit_core.get('reset', 0), timezone.utc).isoformat() if rate_limit_core.get('reset') else None,
+                    "limit": getattr(core, "limit", "N/A"),
+                    "remaining": getattr(core, "remaining", "N/A"),
+                    "reset": datetime.fromtimestamp(core.reset.timestamp(), timezone.utc).isoformat() if getattr(core, "reset", None) else None,
                 }
             except Exception:
                 # Fallback if rate limit API changes
