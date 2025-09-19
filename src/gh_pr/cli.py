@@ -387,15 +387,20 @@ def _launch_tui(cfg: CLIConfig) -> None:
         from types import SimpleNamespace
         tui_config_obj = SimpleNamespace(**tui_config)
 
+        # Initialize PR Manager
+        from .core.pr_manager import PRManager
+        pr_manager = PRManager(github_client, cache_manager)
+
         # Launch the TUI
         app = GhPrTUI(
-            github_service=github_client,
-            cache_service=cache_manager,
-            config=tui_config_obj
+            github_client=github_client,
+            pr_manager=pr_manager,
+            config_manager=config_manager,
+            initial_repo=cfg.repo or config_manager.get("default_repo")
         )
         app.run()
 
-    except ImportError as e:
+    except ImportError:
         console.print("[red]✗ TUI mode requires Textual library[/red]")
         console.print("[dim]Install with: pip install textual[/dim]")
         sys.exit(1)
@@ -407,7 +412,6 @@ def _launch_tui(cfg: CLIConfig) -> None:
         if cfg.verbose:
             console.print_exception()
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
