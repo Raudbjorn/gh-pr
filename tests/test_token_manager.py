@@ -86,6 +86,28 @@ class TestTokenValidation:
     """Test token validation functionality."""
 
     @patch("gh_pr.auth.token.Github")
+    def test_validate_token_network_error(self, mock_github_class):
+        """Test validation of a token when a network error occurs."""
+        mock_github = Mock()
+        # Simulate a network error (e.g., requests.exceptions.ConnectionError)
+        import requests
+        mock_github.get_user.side_effect = requests.exceptions.ConnectionError("Network failure")
+        mock_github_class.return_value = mock_github
+
+        manager = TokenManager(token="ghp_network_error_token")
+        assert manager.validate_token() is False
+
+    @patch("gh_pr.auth.token.Github")
+    def test_validate_token_unexpected_exception(self, mock_github_class):
+        """Test validation of a token when an unexpected exception occurs."""
+        mock_github = Mock()
+        mock_github.get_user.side_effect = Exception("Unexpected error")
+        mock_github_class.return_value = mock_github
+
+        manager = TokenManager(token="ghp_unexpected_error_token")
+        assert manager.validate_token() is False
+
+    @patch("gh_pr.auth.token.Github")
     def test_validate_token_valid(self, mock_github_class):
         """Test validation of a valid token."""
         # Setup mock
