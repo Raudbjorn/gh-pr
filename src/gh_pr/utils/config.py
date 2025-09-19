@@ -1,5 +1,7 @@
 """Configuration management for gh-pr."""
 
+import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -9,6 +11,48 @@ except ImportError:
     import tomli as tomllib
 
 import tomli_w
+
+logger = logging.getLogger(__name__)
+
+# Constants for allowed config directories
+ALLOWED_CONFIG_DIRS = [
+    Path.cwd(),  # Current working directory
+    Path.home() / ".config" / "gh-pr",  # User config directory
+    Path.home(),  # User home directory
+]
+
+
+def _validate_config_path(config_path: Path) -> bool:
+    """
+    Validate that config path is within allowed directories.
+
+    Args:
+        config_path: Path to validate
+
+    Returns:
+        True if path is safe, False otherwise
+    """
+    try:
+        # Resolve the path to handle symlinks and relative paths
+        resolved_path = config_path.resolve()
+
+        # Check if the path is within any allowed directory
+        for allowed_dir in ALLOWED_CONFIG_DIRS:
+            try:
+                allowed_resolved = allowed_dir.resolve()
+                # Check if config path is relative to allowed directory
+                resolved_path.relative_to(allowed_resolved)
+                return True
+            except ValueError:
+                # Path is not relative to this allowed directory, continue checking
+                continue
+
+        logger.warning(f"Config path not in allowed directories: {resolved_path}")
+        return False
+
+    except (OSError, RuntimeError) as e:
+        logger.warning(f"Failed to validate config path {config_path}: {e}")
+        return False
 
 
 class ConfigManager:
@@ -59,7 +103,11 @@ class ConfigManager:
             Path object or None
         """
         if config_path:
-            return Path(config_path)
+            config_path_obj = Path(config_path)
+            if not _validate_config_path(config_path_obj):
+                logger.warning(f"Invalid config path provided: {config_path}")
+                return None
+            return config_path_obj
 
         # Check locations in order of precedence
         locations = [
@@ -69,7 +117,7 @@ class ConfigManager:
         ]
 
         for location in locations:
-            if location.exists():
+            if location.exists() and _validate_config_path(location):
                 return location
 
         return None
@@ -82,8 +130,9 @@ class ConfigManager:
 
             # Merge with defaults
             self._merge_config(self.config, loaded_config)
-        except Exception:
+        except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError) as e:
             # If config loading fails, use defaults
+            logger.debug(f"Failed to load config from {self.config_path}: {e}")
             pass
 
     def _merge_config(self, base: dict[str, Any], update: dict[str, Any]) -> None:
@@ -152,6 +201,11 @@ class ConfigManager:
         """
         save_path = (Path(path) if path else self.config_path) or Path.home() / ".config" / "gh-pr" / "config.toml"
 
+        # Validate the save path
+        if not _validate_config_path(save_path):
+            logger.error(f"Invalid save path: {save_path}")
+            return False
+
         try:
             save_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -159,5 +213,6 @@ class ConfigManager:
                 tomli_w.dump(self.config, f)
 
             return True
-        except Exception:
+        except (OSError, PermissionError, TypeError) as e:
+            logger.debug(f"Failed to save config to {save_path}: {e}")
             return False

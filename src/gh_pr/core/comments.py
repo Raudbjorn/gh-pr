@@ -100,25 +100,25 @@ class CommentProcessor:
 
             # Look for suggestion blocks
             if "```suggestion" in body:
-                # Extract suggestion content
+                # Extract suggestion content with improved regex
                 import re
-                # Extract suggestion content
-                pattern = r"```suggestion\n(.*?)\n```"
+                # Handle suggestions with optional newlines and whitespace variations
+                pattern = r"```suggestion\s*(.*?)(?:\n)?```"
                 matches = []
                 for match in re.finditer(pattern, body, re.DOTALL):
-                    # Extract suggestion content directly
+                    # Extract and clean suggestion content
                     suggestion_content = match.group(1).strip()
-                    matches.append(suggestion_content)
+                    if suggestion_content:  # Only add non-empty suggestions
+                        matches.append(suggestion_content)
 
-                for match in matches:
-                    suggestions.append({
-                        "comment_id": comment["id"],
-                        "author": comment["author"],
-                        "path": comment["path"],
-                        "line": comment.get("line"),
-                        "suggestion": match,
-                        "original_code": self._extract_original_code(comment),
-                    })
+                suggestions.extend([{
+                    "comment_id": comment["id"],
+                    "author": comment["author"],
+                    "path": comment["path"],
+                    "line": comment.get("line"),
+                    "suggestion": match,
+                    "original_code": self._extract_original_code(comment),
+                } for match in matches])
 
         return suggestions
 

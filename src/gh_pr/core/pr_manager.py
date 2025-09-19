@@ -13,6 +13,7 @@ from ..utils.cache import CacheManager
 from .comments import CommentProcessor
 from .filters import CommentFilter
 from .github import GitHubClient
+from .graphql import GraphQLClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,17 @@ class PRManager:
         self.cache = cache_manager
         self.comment_processor = CommentProcessor()
         self.filter = CommentFilter()
+        # Initialize GraphQL client with same token as REST client
+        self._graphql_client = None
+
+    @property
+    def graphql(self) -> GraphQLClient:
+        """Get GraphQL client, initializing if needed."""
+        if self._graphql_client is None:
+            # Extract token from PyGithub client
+            token = self.github.github._Github__requester._Requester__auth.token
+            self._graphql_client = GraphQLClient(token)
+        return self._graphql_client
 
     def parse_pr_identifier(
         self, identifier: str, default_repo: Optional[str] = None
@@ -516,7 +528,7 @@ class PRManager:
 
     def resolve_outdated_comments(
         self, owner: str, repo: str, pr_number: int
-    ) -> int:
+    ) -> tuple[int, list[str]]:
         """
         Resolve all outdated unresolved comments.
 
@@ -526,19 +538,86 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Number of comments resolved
-
-        Raises:
-            NotImplementedError: This feature is not yet implemented
+            Tuple of (number of comments resolved, list of error messages)
         """
-        raise NotImplementedError(
-            "Resolving outdated comments requires GraphQL API implementation. "
-            "This feature is not yet implemented."
-        )
+        errors = []
+        resolved_count = 0
+
+        # Input validation
+        if not all([owner, repo]):
+            errors.append("Owner and repository name are required")
+            return 0, errors
+
+        if pr_number <= 0:
+            errors.append("PR number must be positive")
+            return 0, errors
+
+        try:
+            # Check permissions first
+            perm_result = self.graphql.check_permissions(owner, repo)
+            if not perm_result.success:
+                errors.extend([err.message for err in perm_result.errors])
+                return 0, errors
+
+            # Check if user has write permissions
+            if perm_result.data:
+                repo_data = perm_result.data.get("repository", {})
+                permission = repo_data.get("viewerPermission", "")
+                if permission not in ["WRITE", "ADMIN", "MAINTAIN"]:
+                    errors.append(f"Insufficient permissions. Need WRITE or higher, got {permission}")
+                    return 0, errors
+
+            # Get all review threads
+            threads_result = self.graphql.get_pr_threads(owner, repo, pr_number)
+            if not threads_result.success:
+                errors.extend([err.message for err in threads_result.errors])
+                return 0, errors
+
+            if not threads_result.data:
+                errors.append("No data returned from GitHub API")
+                return 0, errors
+
+            # Extract threads from response
+            pr_data = threads_result.data.get("repository", {}).get("pullRequest", {})
+            if not pr_data:
+                errors.append(f"Pull request #{pr_number} not found")
+                return 0, errors
+
+            threads = pr_data.get("reviewThreads", {}).get("nodes", [])
+
+            # Filter for outdated, unresolved threads
+            outdated_threads = [
+                thread for thread in threads
+                if thread.get("isOutdated", False) and not thread.get("isResolved", False)
+            ]
+
+            logger.info(f"Found {len(outdated_threads)} outdated unresolved threads")
+
+            # Resolve each outdated thread
+            for thread in outdated_threads:
+                thread_id = thread.get("id")
+                if not thread_id:
+                    errors.append("Thread missing ID, skipping")
+                    continue
+
+                resolve_result = self.graphql.resolve_thread(thread_id)
+                if resolve_result.success:
+                    resolved_count += 1
+                    logger.debug(f"Resolved thread {thread_id}")
+                else:
+                    error_msgs = [err.message for err in resolve_result.errors]
+                    errors.append(f"Failed to resolve thread {thread_id}: {'; '.join(error_msgs)}")
+
+        except Exception as e:
+            logger.error(f"Unexpected error resolving outdated comments: {e}")
+            errors.append(f"Unexpected error: {str(e)}")
+
+        logger.info(f"Resolved {resolved_count} outdated comments with {len(errors)} errors")
+        return resolved_count, errors
 
     def accept_all_suggestions(
         self, owner: str, repo: str, pr_number: int
-    ) -> int:
+    ) -> tuple[int, list[str]]:
         """
         Accept all suggestions in PR comments.
 
@@ -548,13 +627,82 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Number of suggestions accepted
-
-        Raises:
-            NotImplementedError: This feature is not yet implemented
+            Tuple of (number of suggestions accepted, list of error messages)
         """
-        raise NotImplementedError(
-            "Accepting suggestions requires specific API endpoints. "
-            "This feature is not yet implemented."
-        )
+        errors = []
+        accepted_count = 0
+
+        # Input validation
+        if not all([owner, repo]):
+            errors.append("Owner and repository name are required")
+            return 0, errors
+
+        if pr_number <= 0:
+            errors.append("PR number must be positive")
+            return 0, errors
+
+        try:
+            # Check permissions first
+            perm_result = self.graphql.check_permissions(owner, repo)
+            if not perm_result.success:
+                errors.extend([err.message for err in perm_result.errors])
+                return 0, errors
+
+            # Check if user has write permissions
+            if perm_result.data:
+                repo_data = perm_result.data.get("repository", {})
+                permission = repo_data.get("viewerPermission", "")
+                if permission not in ["WRITE", "ADMIN", "MAINTAIN"]:
+                    errors.append(f"Insufficient permissions. Need WRITE or higher, got {permission}")
+                    return 0, errors
+
+            # Get all suggestions in PR
+            suggestions_result = self.graphql.get_pr_suggestions(owner, repo, pr_number)
+            if not suggestions_result.success:
+                errors.extend([err.message for err in suggestions_result.errors])
+                return 0, errors
+
+            if not suggestions_result.data:
+                errors.append("No data returned from GitHub API")
+                return 0, errors
+
+            # Extract suggestions from response
+            pr_data = suggestions_result.data.get("repository", {}).get("pullRequest", {})
+            if not pr_data:
+                errors.append(f"Pull request #{pr_number} not found")
+                return 0, errors
+
+            reviews = pr_data.get("reviews", {}).get("nodes", [])
+            all_suggestions = []
+
+            # Collect all suggestions from all review comments
+            for review in reviews:
+                comments = review.get("comments", {}).get("nodes", [])
+                for comment in comments:
+                    suggestions = comment.get("suggestions", {}).get("nodes", [])
+                    all_suggestions.extend(suggestions)
+
+            logger.info(f"Found {len(all_suggestions)} suggestions to accept")
+
+            # Accept each suggestion
+            for suggestion in all_suggestions:
+                suggestion_id = suggestion.get("id")
+                if not suggestion_id:
+                    errors.append("Suggestion missing ID, skipping")
+                    continue
+
+                accept_result = self.graphql.accept_suggestion(suggestion_id)
+                if accept_result.success:
+                    accepted_count += 1
+                    logger.debug(f"Accepted suggestion {suggestion_id}")
+                else:
+                    error_msgs = [err.message for err in accept_result.errors]
+                    errors.append(f"Failed to accept suggestion {suggestion_id}: {'; '.join(error_msgs)}")
+
+        except Exception as e:
+            logger.error(f"Unexpected error accepting suggestions: {e}")
+            errors.append(f"Unexpected error: {str(e)}")
+
+        logger.info(f"Accepted {accepted_count} suggestions with {len(errors)} errors")
+        return accepted_count, errors
 

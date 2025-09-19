@@ -71,7 +71,7 @@ class CacheManager:
         try:
             return self.cache.get(key)
         except Exception as e:
-            logger.debug(f"Cache get failed for key '{key}': {e}")
+            logger.warning(f"Cache get failed for key '{key}': {e}")
             return None
 
     def set(self, key: str, value: Any, ttl: int = 300) -> bool:
@@ -92,7 +92,8 @@ class CacheManager:
         try:
             self.cache.set(key, value, expire=ttl)
             return True
-        except Exception:
+        except (OSError, AttributeError, TypeError) as e:
+            logger.warning(f"Cache set failed for key '{key}': {e}")
             return False
 
     def delete(self, key: str) -> bool:
@@ -111,7 +112,8 @@ class CacheManager:
         try:
             del self.cache[key]
             return True
-        except Exception:
+        except (KeyError, OSError, AttributeError) as e:
+            logger.debug(f"Cache delete failed for key '{key}': {e}")
             return False
 
     def clear(self) -> bool:
@@ -127,7 +129,8 @@ class CacheManager:
         try:
             self.cache.clear()
             return True
-        except Exception:
+        except (OSError, AttributeError) as e:
+            logger.debug(f"Cache clear failed: {e}")
             return False
 
     def generate_key(self, *parts: str) -> str:
