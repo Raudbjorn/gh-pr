@@ -41,7 +41,16 @@ class PRListItem(ListItem):
         state = pr_data.get("state", "unknown")
 
         # Create rich formatted label
-        state_color = "green" if state == "open" else "red" if state == "closed" else "yellow"
+        if state == "open":
+            state_color = "green"
+        elif state == "closed":
+            state_color = "red"
+        elif state == "merged":
+            state_color = "magenta"
+        elif state == "draft":
+            state_color = "grey50"
+        else:
+            state_color = "yellow"
         label = f"[bold]#{pr_number}[/bold] - {title[:50]}... by [cyan]{author}[/cyan] [{state_color}]{state}[/{state_color}]"
 
         super().__init__(Static(label), *args, **kwargs)
