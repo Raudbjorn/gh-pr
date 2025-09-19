@@ -444,12 +444,12 @@ class KeyBindingsDisplay(Widget):
         KeyBinding("c", MenuAction.COPY, "Copy to clipboard"),
         KeyBinding("o", MenuAction.OPEN_BROWSER, "Open in browser"),
         KeyBinding("?", MenuAction.HELP, "Show help"),
-        KeyBinding("j", MenuAction.FILTER, "Next item"),  # Navigation
-        KeyBinding("k", MenuAction.FILTER, "Previous item"),  # Navigation
-        KeyBinding("enter", MenuAction.FILTER, "Select item"),  # Navigation
-        KeyBinding("/", MenuAction.FILTER, "Search"),  # Search
-        KeyBinding("tab", MenuAction.FILTER, "Next pane"),  # Navigation
-        KeyBinding("shift+tab", MenuAction.FILTER, "Previous pane"),  # Navigation
+        KeyBinding("j", MenuAction.NAVIGATE_DOWN, "Next item"),  # Navigation
+        KeyBinding("k", MenuAction.NAVIGATE_UP, "Previous item"),  # Navigation
+        KeyBinding("enter", MenuAction.SELECT, "Select item"),  # Navigation
+        KeyBinding("/", MenuAction.SEARCH, "Search"),  # Search
+        KeyBinding("tab", MenuAction.NEXT_PANE, "Next pane"),  # Navigation
+        KeyBinding("shift+tab", MenuAction.PREV_PANE, "Previous pane"),  # Navigation
     ]
 
     def __init__(self, bindings: Optional[List[KeyBinding]] = None):
