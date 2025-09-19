@@ -19,7 +19,7 @@ from gh_pr.plugins.loader import PluginLoader
 from gh_pr.plugins.manager import PluginManager
 
 
-class TestPluginIntegration(unittest.TestCase):
+class TestPluginIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for plugin system."""
 
     def setUp(self):
@@ -136,8 +136,8 @@ class {name.title()}Plugin(CommentFilterPlugin):
         )
 
         # Initialize plugins
-        init_results = await manager.initialize()
-        self.assertTrue(all(init_results.values()))
+        init_result = await manager.initialize()
+        self.assertTrue(init_result)
 
         # Test PR event dispatch
         pr_event = {
@@ -235,9 +235,12 @@ class FailingPlugin(Plugin):
         )
 
         # Initialize - should partially succeed
-        init_results = await manager.initialize()
-        self.assertFalse(init_results.get('ghpr_plugin_failing', True))
-        self.assertTrue(init_results.get('ghpr_plugin_working', False))
+        success = await manager.initialize()
+        self.assertFalse(success)  # Should fail due to failing plugin
+
+        # Check plugin errors via loader
+        self.assertIn('ghpr_plugin_failing', manager.loader.get_plugin_errors())
+        self.assertIsNotNone(manager.loader.get_plugin('ghpr_plugin_working'))
 
         # Working plugin should still function
         notif_results = await manager.send_notification("Test", "Message")

@@ -609,7 +609,7 @@ class TestBatchOperationsIntegration:
 
     def test_progress_bar_integration(self):
         """Test that progress bar works correctly."""
-        with patch('rich.progress.Progress') as mock_progress_class:
+        with patch('gh_pr.core.batch.Progress') as mock_progress_class:
             mock_progress = Mock()
             mock_task = Mock()
             mock_progress.add_task.return_value = mock_task

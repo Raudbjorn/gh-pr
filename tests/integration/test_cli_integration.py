@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from click.testing import CliRunner
 
-from gh_pr.cli import cli, list_prs, show_pr, review_pr, comment_on_pr
+from gh_pr.cli import main as cli
 
 
 class TestCLIIntegration(unittest.TestCase):
@@ -51,8 +51,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr2.state = "open"
         mock_pr2.user.login = "user2"
 
-        mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Run command
         result = self.runner.invoke(cli, ['list', 'owner/repo'])
@@ -75,8 +75,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr.user.login = "alice"
         mock_pr.labels = [Mock(name="bug")]
 
-        mock_repo.get_pulls.return_value = [mock_pr]
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pulls.return_value = [mock_pr]
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Test with state filter
         result = self.runner.invoke(cli, [
@@ -123,8 +123,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr.get_reviews.return_value = []
         mock_pr.get_commits.return_value = []
 
-        mock_repo.get_pull.return_value = mock_pr
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull.return_value = mock_pr
+        mock_client.get_repo.return_value = self.mock_repo
 
         result = self.runner.invoke(cli, ['show', 'owner/repo', '123'])
 
@@ -143,8 +143,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr.number = 456
         mock_pr.create_review = Mock(return_value=Mock(id=1))
 
-        mock_repo.get_pull.return_value = mock_pr
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull.return_value = mock_pr
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Approve PR
         result = self.runner.invoke(cli, [
@@ -172,8 +172,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_comment = Mock(id=1, body="Test comment")
         mock_pr.create_issue_comment.return_value = mock_comment
 
-        mock_repo.get_pull.return_value = mock_pr
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull.return_value = mock_pr
+        mock_client.get_repo.return_value = self.mock_repo
 
         result = self.runner.invoke(cli, [
             'comment', 'owner/repo', '789',
@@ -194,8 +194,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr.number = 999
         mock_pr.create_issue_comment.return_value = Mock(id=2)
 
-        mock_repo.get_pull.return_value = mock_pr
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull.return_value = mock_pr
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Simulate editor input
         mock_edit.return_value = "Comment from editor"
@@ -224,8 +224,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_pr.body = "Test body"
         mock_pr.labels = []
 
-        mock_repo.get_pulls.return_value = [mock_pr]
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pulls.return_value = [mock_pr]
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Test JSON export
         output_path = Path(self.temp_dir) / 'export.json'
@@ -261,8 +261,8 @@ class TestCLIIntegration(unittest.TestCase):
         def get_pull(number):
             return prs[number - 1]
 
-        mock_repo.get_pull = get_pull
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull = get_pull
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Test batch label addition
         result = self.runner.invoke(cli, [
@@ -281,8 +281,8 @@ class TestCLIIntegration(unittest.TestCase):
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
-        mock_repo.create_hook.return_value = Mock(id=1)
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.create_hook.return_value = Mock(id=1)
+        mock_client.get_repo.return_value = self.mock_repo
 
         result = self.runner.invoke(cli, [
             'webhook', 'setup', 'owner/repo',
@@ -291,7 +291,7 @@ class TestCLIIntegration(unittest.TestCase):
         ])
 
         self.assertEqual(result.exit_code, 0)
-        mock_repo.create_hook.assert_called_once()
+        self.mock_repo.create_hook.assert_called_once()
 
     def test_config_command(self):
         """Test config command."""
@@ -371,8 +371,8 @@ class TestCLIIntegration(unittest.TestCase):
             pr.user.login = "user"
             prs.append(pr)
 
-        mock_repo.get_pulls.return_value = prs
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pulls.return_value = prs
+        mock_client.get_repo.return_value = self.mock_repo
 
         # Test with limit
         result = self.runner.invoke(cli, [
@@ -410,9 +410,8 @@ class TestCompleteWorkflow(unittest.TestCase):
         mock_pr.create_review = Mock(return_value=Mock(id=1))
         mock_pr.create_issue_comment = Mock(return_value=Mock(id=2))
 
-        mock_repo = Mock()
-        mock_repo.get_pull.return_value = mock_pr
-        mock_client.get_repo.return_value = mock_repo
+        self.mock_repo.get_pull.return_value = mock_pr
+        mock_client.get_repo.return_value = self.mock_repo
 
         # 1. View PR details
         result = self.runner.invoke(cli, ['show', 'owner/repo', '100'])

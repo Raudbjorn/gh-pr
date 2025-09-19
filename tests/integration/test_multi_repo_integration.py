@@ -18,7 +18,7 @@ from gh_pr.utils.notifications import (
 )
 
 
-class TestMultiRepoIntegration(unittest.TestCase):
+class TestMultiRepoIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for multi-repo operations."""
 
     def setUp(self):
@@ -203,7 +203,7 @@ class TestMultiRepoIntegration(unittest.TestCase):
         self.assertIn("documentation", results["org3/repo3"])
 
 
-class TestNotificationIntegration(unittest.TestCase):
+class TestNotificationIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for notification system."""
 
     def setUp(self):
@@ -319,13 +319,13 @@ class TestNotificationIntegration(unittest.TestCase):
         self.assertIn("terminal", printed_content.lower())
 
 
-class TestCompleteWorkflow(unittest.TestCase):
+class TestCompleteWorkflow(unittest.IsolatedAsyncioTestCase):
     """Test complete Phase 5 workflow integration."""
 
     async def test_pr_event_to_notification_workflow(self):
         """Test complete workflow from PR event to notification."""
         from gh_pr.webhooks.events import WebhookEvent, EventType
-        from gh_pr.webhooks.handler import WebhookHandler
+        from gh_pr.webhooks.handlers import WebhookHandler
 
         # Create components
         webhook_handler = WebhookHandler()
@@ -357,14 +357,14 @@ class TestCompleteWorkflow(unittest.TestCase):
 
             return {'status': 'handled', 'notified': True}
 
-        # Register handler
-        webhook_handler.register_handler(EventType.PULL_REQUEST, pr_handler)
+        # Register handler using plugin API
+        webhook_handler.register_plugin("test-pr-handler", pr_handler)
 
-        # Create PR event
+        # Create PR event with action in payload
         pr_event = WebhookEvent(
             type=EventType.PULL_REQUEST,
-            action='opened',
             payload={
+                'action': 'opened',
                 'pull_request': {
                     'number': 789,
                     'title': 'Add new feature',
@@ -373,8 +373,8 @@ class TestCompleteWorkflow(unittest.TestCase):
             }
         )
 
-        # Process event
-        results = await webhook_handler.handle_event(pr_event)
+        # Process event using handle method
+        results = await webhook_handler.handle(pr_event)
 
         self.assertTrue(workflow_executed)
         self.assertEqual(len(results), 1)

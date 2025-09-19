@@ -17,12 +17,8 @@ class TestPRManagerGraphQLIntegration:
         self.mock_github_client = Mock(spec=GitHubClient)
         self.mock_cache_manager = Mock(spec=CacheManager)
 
-        # Mock the GitHub client's internal auth token access
-        mock_requester = Mock()
-        mock_auth = Mock()
-        mock_auth.token = "test_token"
-        mock_requester._Requester__auth = mock_auth
-        self.mock_github_client.github._Github__requester = mock_requester
+        # PRManager.graphql reads GitHubClient.token
+        self.mock_github_client.token = "test_token"  # noqa: S105
 
         self.pr_manager = PRManager(self.mock_github_client, self.mock_cache_manager)
 

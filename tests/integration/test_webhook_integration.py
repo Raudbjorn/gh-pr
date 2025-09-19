@@ -160,8 +160,8 @@ class TestWebhookIntegration(AioHTTPTestCase):
             handler2_called = True
             return {'handler': 2}
 
-        self.webhook_handler.register_handler(EventType.ISSUE, handler1)
-        self.webhook_handler.register_handler(EventType.ISSUE, handler2)
+        self.webhook_handler.register_plugin('handler1', handler1)
+        self.webhook_handler.register_plugin('handler2', handler2)
 
         payload = {'action': 'opened', 'issue': {'id': 456}}
         payload_bytes = json.dumps(payload).encode()

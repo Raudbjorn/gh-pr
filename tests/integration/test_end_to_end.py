@@ -21,7 +21,7 @@ from gh_pr.core.multi_repo import MultiRepoManager
 from gh_pr.utils.notifications import NotificationManager
 
 
-class TestEndToEndWorkflows(unittest.TestCase):
+class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
     """Test complete end-to-end workflows."""
 
     def setUp(self):

@@ -18,7 +18,7 @@ class TestTokenManagerTimeouts:
         # Simulate timeout
         mock_run.side_effect = subprocess.TimeoutExpired(GH_CLI_AUTH_STATUS_CMD, SUBPROCESS_TIMEOUT)
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
 
         # Should handle timeout gracefully and return None
         result = token_manager._get_gh_cli_token()
@@ -35,7 +35,7 @@ class TestTokenManagerTimeouts:
         """Test that timeout errors are logged appropriately."""
         mock_run.side_effect = subprocess.TimeoutExpired(GH_CLI_AUTH_STATUS_CMD, SUBPROCESS_TIMEOUT)
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -49,7 +49,7 @@ class TestTokenManagerTimeouts:
         """Test that subprocess errors are handled gracefully."""
         mock_run.side_effect = subprocess.SubprocessError("Mock subprocess error")
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -59,7 +59,7 @@ class TestTokenManagerTimeouts:
         """Test that FileNotFoundError is handled when gh CLI is not installed."""
         mock_run.side_effect = FileNotFoundError("gh command not found")
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -69,7 +69,7 @@ class TestTokenManagerTimeouts:
         """Test that unexpected errors are handled gracefully."""
         mock_run.side_effect = RuntimeError("Unexpected error")
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -88,7 +88,7 @@ GitHub.com
         mock_result.returncode = 0
         mock_run.return_value = mock_result
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result == "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -108,7 +108,7 @@ GitHub.com
 
         mock_run.side_effect = [status_result, token_result]
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result == "ghp_yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
@@ -124,7 +124,7 @@ GitHub.com
 
         mock_run.return_value = failed_result
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -138,7 +138,7 @@ GitHub.com
 
         mock_run.return_value = empty_result
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result is None
@@ -157,7 +157,7 @@ GitHub.com
 
         mock_run.side_effect = [failed_result, mock_result]
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         assert result == "ghp_zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
@@ -190,7 +190,7 @@ class TestTokenManagerReliability:
     @patch.dict('os.environ', {'GH_TOKEN': 'ghp_env_token_123456789'})
     def test_token_manager_with_gh_token_env(self):
         """Test TokenManager with GH_TOKEN environment variable."""
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         assert token_manager.get_token() == "ghp_env_token_123456789"
 
     @patch.dict('os.environ', {'GITHUB_TOKEN': 'ghp_github_env_token_123456789'})
@@ -199,7 +199,7 @@ class TestTokenManagerReliability:
         # Clear GH_TOKEN to test GITHUB_TOKEN fallback
         with patch.dict('os.environ', {}, clear=True):
             with patch.dict('os.environ', {'GITHUB_TOKEN': 'ghp_github_env_token_123456789'}):
-                token_manager = TokenManager()
+                token_manager = TokenManager(token="dummy")  # noqa: S106
                 assert token_manager.get_token() == "ghp_github_env_token_123456789"
 
     @patch.dict('os.environ', {}, clear=True)
@@ -208,7 +208,7 @@ class TestTokenManagerReliability:
         """Test TokenManager fallback to gh CLI."""
         mock_gh_cli.return_value = "ghp_cli_token_123456789"
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         assert token_manager.get_token() == "ghp_cli_token_123456789"
 
     @patch.dict('os.environ', {}, clear=True)
@@ -218,7 +218,7 @@ class TestTokenManagerReliability:
         mock_gh_cli.return_value = None
 
         with pytest.raises(ValueError, match="No GitHub token found"):
-            TokenManager()
+            TokenManager(token="dummy")  # noqa: S106
 
     def test_token_manager_token_precedence(self):
         """Test that token sources are checked in correct precedence order."""
@@ -233,7 +233,7 @@ class TestTokenManagerReliability:
     @patch.dict('os.environ', {'GH_TOKEN': 'ghp_gh_token', 'GITHUB_TOKEN': 'ghp_github_token'})
     def test_gh_token_precedence_over_github_token(self):
         """Test that GH_TOKEN takes precedence over GITHUB_TOKEN."""
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         assert token_manager.get_token() == "ghp_gh_token"
 
     @patch('gh_pr.auth.token.Github')
@@ -462,7 +462,7 @@ GitHub.com
         mock_result.returncode = 0
         mock_run.return_value = mock_result
 
-        token_manager = TokenManager()
+        token_manager = TokenManager(token="dummy")  # noqa: S106
         result = token_manager._get_gh_cli_token()
 
         # Should return the first token found
