@@ -21,6 +21,21 @@ class CommentFilter:
         """
         return self.filter_comments(threads, mode)
 
+    def apply(
+        self, threads: list[dict[str, Any]], mode: str = "unresolved"
+    ) -> list[dict[str, Any]]:
+        """
+        Apply filters to comment threads (alias for filter_comments for compatibility).
+
+        Args:
+            threads: List of thread dictionaries
+            mode: Filter mode
+
+        Returns:
+            Filtered list of threads
+        """
+        return self.filter_comments(threads, mode)
+
     def filter_comments(
         self, threads: list[dict[str, Any]], mode: str = "unresolved"
     ) -> list[dict[str, Any]]:
