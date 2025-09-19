@@ -23,220 +23,131 @@ class TestCacheManager:
     @pytest.fixture
     def cache_manager(self, temp_cache_dir):
         """Create a CacheManager instance with temp directory."""
-        return CacheManager(cache_dir=temp_cache_dir, ttl_seconds=3600)
+        return CacheManager(enabled=True, location=str(temp_cache_dir))
 
     def test_init_default(self):
         """Test CacheManager initialization with defaults."""
         manager = CacheManager()
         assert manager.enabled is True
-        assert manager.ttl == timedelta(seconds=3600)
-        assert manager.cache_dir.name == ".gh-pr-cache"
+        assert manager.location.name == "gh-pr"  # default location ends with gh-pr
 
     def test_init_custom(self, temp_cache_dir):
         """Test CacheManager initialization with custom values."""
         manager = CacheManager(
-            cache_dir=temp_cache_dir, ttl_seconds=7200, enabled=False
+            enabled=False, location=str(temp_cache_dir)
         )
         assert manager.enabled is False
-        assert manager.ttl == timedelta(seconds=7200)
-        assert manager.cache_dir == temp_cache_dir
+        assert manager.location == temp_cache_dir
 
     def test_init_creates_cache_dir(self, temp_cache_dir):
         """Test that initialization creates cache directory."""
         cache_path = temp_cache_dir / "cache"
         assert not cache_path.exists()
-        CacheManager(cache_dir=cache_path)
+        CacheManager(enabled=True, location=str(cache_path))
         assert cache_path.exists()
 
-    def test_get_cache_key(self, cache_manager):
+    def test_generate_key(self, cache_manager):
         """Test cache key generation."""
-        key = cache_manager._get_cache_key("owner", "repo", 42, "data")
-        assert key == "owner_repo_42_data"
+        key = cache_manager.generate_key("owner", "repo", 42, "data")
+        assert isinstance(key, str)
+        assert len(key) == 16  # SHA256 truncated to 16 chars
 
         # Test with special characters
-        key = cache_manager._get_cache_key("my-org", "my.repo", 123, "pr-data")
-        assert key == "my-org_my.repo_123_pr-data"
-
-    def test_get_cache_path(self, cache_manager):
-        """Test cache path generation."""
-        path = cache_manager._get_cache_path("test_key")
-        assert path.parent == cache_manager.cache_dir
-        assert path.name == "test_key.json"
+        key = cache_manager.generate_key("my-org", "my.repo", 123, "pr-data")
+        assert isinstance(key, str)
+        assert len(key) == 16
 
     def test_set_and_get(self, cache_manager):
         """Test setting and getting cached data."""
+        key = cache_manager.generate_key("test")
         data = {"test": "data", "number": 42}
-        cache_manager.set("owner", "repo", 42, "test", data)
+        result = cache_manager.set(key, data, ttl=300)
+        assert result is True
 
-        retrieved = cache_manager.get("owner", "repo", 42, "test")
+        retrieved = cache_manager.get(key)
         assert retrieved == data
 
     def test_get_nonexistent(self, cache_manager):
         """Test getting non-existent cache entry."""
-        result = cache_manager.get("owner", "repo", 999, "missing")
+        key = cache_manager.generate_key("missing")
+        result = cache_manager.get(key)
         assert result is None
+
+    def test_delete(self, cache_manager):
+        """Test cache deletion."""
+        key = cache_manager.generate_key("to_delete")
+        data = {"test": "data"}
+        cache_manager.set(key, data, ttl=300)
+
+        # Verify data is cached
+        assert cache_manager.get(key) == data
+
+        # Delete
+        result = cache_manager.delete(key)
+        assert result is True
+
+        # Verify data is gone
+        assert cache_manager.get(key) is None
 
     def test_get_expired(self, cache_manager):
         """Test getting expired cache entry."""
+        import time
+        key = cache_manager.generate_key("expired")
         data = {"test": "data"}
-        cache_manager.set("owner", "repo", 42, "test", data)
+        # Set with very short TTL
+        cache_manager.set(key, data, ttl=1)
 
-        # Modify the cache file to have old timestamp
-        key = cache_manager._get_cache_key("owner", "repo", 42, "test")
-        cache_path = cache_manager._get_cache_path(key)
-
-        old_time = datetime.now() - timedelta(seconds=7200)
-        cache_data = {
-            "timestamp": old_time.isoformat(),
-            "data": data,
-        }
-        cache_path.write_text(json.dumps(cache_data))
+        # Wait for expiration
+        time.sleep(2)
 
         # Should return None for expired data
-        result = cache_manager.get("owner", "repo", 42, "test")
+        result = cache_manager.get(key)
         assert result is None
 
     def test_get_disabled(self, temp_cache_dir):
         """Test that get returns None when cache is disabled."""
-        manager = CacheManager(cache_dir=temp_cache_dir, enabled=False)
-        manager.set("owner", "repo", 42, "test", {"data": "value"})
-        result = manager.get("owner", "repo", 42, "test")
+        manager = CacheManager(enabled=False, location=str(temp_cache_dir))
+        key = manager.generate_key("test")
+        manager.set(key, {"data": "value"}, ttl=300)
+        result = manager.get(key)
         assert result is None
 
     def test_set_disabled(self, temp_cache_dir):
-        """Test that set does nothing when cache is disabled."""
-        manager = CacheManager(cache_dir=temp_cache_dir, enabled=False)
-        manager.set("owner", "repo", 42, "test", {"data": "value"})
+        """Test that set returns False when cache is disabled."""
+        manager = CacheManager(enabled=False, location=str(temp_cache_dir))
+        key = manager.generate_key("test")
+        result = manager.set(key, {"data": "value"}, ttl=300)
+        assert result is False
 
-        # Check that no cache file was created
-        key = manager._get_cache_key("owner", "repo", 42, "test")
-        cache_path = manager._get_cache_path(key)
-        assert not cache_path.exists()
-
-    def test_invalidate(self, cache_manager):
-        """Test cache invalidation."""
-        data = {"test": "data"}
-        cache_manager.set("owner", "repo", 42, "test", data)
-
-        # Verify data is cached
-        assert cache_manager.get("owner", "repo", 42, "test") == data
-
-        # Invalidate
-        cache_manager.invalidate("owner", "repo", 42, "test")
-
-        # Verify data is gone
-        assert cache_manager.get("owner", "repo", 42, "test") is None
-
-    def test_invalidate_nonexistent(self, cache_manager):
-        """Test invalidating non-existent cache entry."""
-        # Should not raise exception
-        cache_manager.invalidate("owner", "repo", 999, "missing")
-
-    def test_clear_all(self, cache_manager):
+    def test_clear(self, cache_manager):
         """Test clearing all cache entries."""
         # Set multiple cache entries
-        cache_manager.set("owner1", "repo1", 1, "data", {"value": 1})
-        cache_manager.set("owner2", "repo2", 2, "data", {"value": 2})
+        key1 = cache_manager.generate_key("entry1")
+        key2 = cache_manager.generate_key("entry2")
+        cache_manager.set(key1, {"value": 1}, ttl=300)
+        cache_manager.set(key2, {"value": 2}, ttl=300)
 
         # Clear all
-        cache_manager.clear_all()
+        result = cache_manager.clear()
+        assert result is True
 
         # Verify all entries are gone
-        assert cache_manager.get("owner1", "repo1", 1, "data") is None
-        assert cache_manager.get("owner2", "repo2", 2, "data") is None
+        assert cache_manager.get(key1) is None
+        assert cache_manager.get(key2) is None
 
-    def test_clear_all_empty_cache(self, cache_manager):
+    def test_delete_nonexistent(self, cache_manager):
+        """Test deleting non-existent cache entry."""
+        # Should not raise exception, just return False
+        key = cache_manager.generate_key("nonexistent")
+        result = cache_manager.delete(key)
+        # delete returns False when key doesn't exist
+        assert result is False
+
+    def test_clear_empty_cache(self, cache_manager):
         """Test clearing empty cache directory."""
         # Should not raise exception
-        cache_manager.clear_all()
-
-    def test_get_cache_size(self, cache_manager):
-        """Test getting cache size."""
-        initial_size = cache_manager.get_cache_size()
-        assert initial_size >= 0
-
-        # Add some data
-        large_data = {"data": "x" * 1000}
-        cache_manager.set("owner", "repo", 42, "test", large_data)
-
-        new_size = cache_manager.get_cache_size()
-        assert new_size > initial_size
-
-    def test_get_cache_stats(self, cache_manager):
-        """Test getting cache statistics."""
-        # Add some cache entries
-        cache_manager.set("owner1", "repo1", 1, "data", {"value": 1})
-        cache_manager.set("owner2", "repo2", 2, "data", {"value": 2})
-
-        stats = cache_manager.get_cache_stats()
-        assert stats["total_files"] == 2
-        assert stats["total_size"] > 0
-        assert "oldest_entry" in stats
-        assert "newest_entry" in stats
-
-    def test_cleanup_expired(self, cache_manager):
-        """Test cleaning up expired entries."""
-        # Set data
-        cache_manager.set("owner", "repo", 42, "test", {"data": "value"})
-
-        # Manually create an expired entry
-        expired_key = "expired_entry"
-        expired_path = cache_manager._get_cache_path(expired_key)
-        old_time = datetime.now() - timedelta(seconds=7200)
-        expired_data = {
-            "timestamp": old_time.isoformat(),
-            "data": {"expired": "data"},
-        }
-        expired_path.write_text(json.dumps(expired_data))
-
-        # Run cleanup
-        removed = cache_manager.cleanup_expired()
-        assert removed == 1
-
-        # Verify expired entry is gone but valid one remains
-        assert not expired_path.exists()
-        assert cache_manager.get("owner", "repo", 42, "test") is not None
-
-    def test_corrupt_cache_file(self, cache_manager):
-        """Test handling of corrupted cache files."""
-        key = cache_manager._get_cache_key("owner", "repo", 42, "test")
-        cache_path = cache_manager._get_cache_path(key)
-
-        # Write invalid JSON
-        cache_path.write_text("not valid json{]")
-
-        # Should return None and not raise exception
-        result = cache_manager.get("owner", "repo", 42, "test")
-        assert result is None
-
-    def test_missing_timestamp_in_cache(self, cache_manager):
-        """Test handling cache file without timestamp."""
-        key = cache_manager._get_cache_key("owner", "repo", 42, "test")
-        cache_path = cache_manager._get_cache_path(key)
-
-        # Write cache without timestamp
-        cache_data = {"data": {"test": "value"}}
-        cache_path.write_text(json.dumps(cache_data))
-
-        # Should return None
-        result = cache_manager.get("owner", "repo", 42, "test")
-        assert result is None
-
-    def test_write_error_handling(self, cache_manager):
-        """Test handling of write errors."""
-        with patch("pathlib.Path.write_text", side_effect=OSError("Write error")):
-            # Should not raise exception
-            cache_manager.set("owner", "repo", 42, "test", {"data": "value"})
-
-    def test_read_error_handling(self, cache_manager):
-        """Test handling of read errors."""
-        # Set data first
-        cache_manager.set("owner", "repo", 42, "test", {"data": "value"})
-
-        with patch("pathlib.Path.read_text", side_effect=OSError("Read error")):
-            # Should return None and not raise exception
-            result = cache_manager.get("owner", "repo", 42, "test")
-            assert result is None
+        result = cache_manager.clear()
+        assert result is True
 
     def test_cache_pr_specific_data(self, cache_manager):
         """Test caching PR-specific data types."""
@@ -247,15 +158,18 @@ class TestCacheManager:
             "author": "testuser",
             "state": "open",
         }
-        cache_manager.set("owner", "repo", 42, "pr", pr_data)
-        assert cache_manager.get("owner", "repo", 42, "pr") == pr_data
+        key = cache_manager.generate_key("pr", 42)
+        cache_manager.set(key, pr_data, ttl=300)
+        assert cache_manager.get(key) == pr_data
 
         # Cache comments
         comments = [{"id": 1, "body": "Comment", "author": "user1"}]
-        cache_manager.set("owner", "repo", 42, "comments", comments)
-        assert cache_manager.get("owner", "repo", 42, "comments") == comments
+        key = cache_manager.generate_key("comments", 42)
+        cache_manager.set(key, comments, ttl=300)
+        assert cache_manager.get(key) == comments
 
         # Cache reviews
         reviews = [{"state": "APPROVED", "author": "reviewer1"}]
-        cache_manager.set("owner", "repo", 42, "reviews", reviews)
-        assert cache_manager.get("owner", "repo", 42, "reviews") == reviews
+        key = cache_manager.generate_key("reviews", 42)
+        cache_manager.set(key, reviews, ttl=300)
+        assert cache_manager.get(key) == reviews

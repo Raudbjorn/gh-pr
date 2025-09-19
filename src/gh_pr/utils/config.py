@@ -140,6 +140,33 @@ class ConfigManager:
 
         config[keys[-1]] = value
 
+    def delete(self, key: str) -> None:
+        """
+        Delete configuration value.
+
+        Args:
+            key: Configuration key (dot-separated)
+        """
+        keys = key.split(".")
+
+        # Handle single key (top-level)
+        if len(keys) == 1:
+            if keys[0] in self.config:
+                del self.config[keys[0]]
+            return
+
+        # Navigate to parent of the key to delete
+        config = self.config
+        for k in keys[:-1]:
+            if not isinstance(config, dict) or k not in config:
+                # Key doesn't exist, nothing to delete
+                return
+            config = config[k]
+
+        # Delete the final key if it exists
+        if isinstance(config, dict) and keys[-1] in config:
+            del config[keys[-1]]
+
     def save(self, path: Optional[str] = None) -> bool:
         """
         Save configuration to file.
@@ -161,3 +188,61 @@ class ConfigManager:
             return True
         except Exception:
             return False
+
+    def get_all(self) -> dict[str, Any]:
+        """
+        Get entire configuration.
+
+        Returns:
+            Configuration dictionary
+        """
+        return self.config.copy()
+
+    def update_section(self, section: str, values: dict[str, Any]) -> None:
+        """
+        Update entire configuration section.
+
+        Args:
+            section: Section name
+            values: New section values
+        """
+        self.config[section] = values
+
+    def has(self, key: str) -> bool:
+        """
+        Check if configuration key exists.
+
+        Args:
+            key: Configuration key (dot-separated)
+
+        Returns:
+            True if key exists
+        """
+        keys = key.split(".")
+        value = self.config
+
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return False
+
+        return True
+
+    def reset_to_defaults(self, defaults: dict[str, Any]) -> None:
+        """
+        Reset configuration to provided defaults.
+
+        Args:
+            defaults: Default configuration
+        """
+        self.config = defaults.copy()
+
+    def merge(self, additional_config: dict[str, Any]) -> None:
+        """
+        Merge additional configuration.
+
+        Args:
+            additional_config: Configuration to merge
+        """
+        self._merge_config(self.config, additional_config)

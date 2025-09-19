@@ -103,3 +103,61 @@ class CommentFilter:
                 filtered.append(thread)
 
         return filtered
+
+    def filter_by_keyword(
+        self, threads: list[dict[str, Any]], keyword: str
+    ) -> list[dict[str, Any]]:
+        """
+        Filter threads by keyword in comment body.
+
+        Args:
+            threads: List of thread dictionaries
+            keyword: Keyword to search for (case-insensitive)
+
+        Returns:
+            Filtered list of threads
+        """
+        filtered = []
+        keyword_lower = keyword.lower()
+
+        for thread in threads:
+            has_keyword = any(
+                keyword_lower in comment.get("body", "").lower()
+                for comment in thread.get("comments", [])
+            )
+
+            if has_keyword:
+                filtered.append(thread)
+
+        return filtered
+
+    def get_filter_stats(self, threads: list[dict[str, Any]]) -> dict[str, int]:
+        """
+        Get statistics about threads.
+
+        Args:
+            threads: List of thread dictionaries
+
+        Returns:
+            Dictionary with statistics
+        """
+        stats = {
+            "total": len(threads),
+            "unresolved": 0,
+            "resolved": 0,
+            "active": 0,
+            "outdated": 0,
+        }
+
+        for thread in threads:
+            if thread.get("is_resolved", False):
+                stats["resolved"] += 1
+            else:
+                stats["unresolved"] += 1
+
+            if not thread.get("is_outdated", False):
+                stats["active"] += 1
+            else:
+                stats["outdated"] += 1
+
+        return stats

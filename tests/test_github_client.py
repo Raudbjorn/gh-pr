@@ -296,7 +296,6 @@ class TestGitHubClient:
         mock_pr.head.sha = "abc123"
 
         mock_commit = Mock()
-        mock_check_suite = Mock()
 
         mock_check_run1 = Mock()
         mock_check_run1.id = 1
@@ -320,8 +319,7 @@ class TestGitHubClient:
         # Simulate missing output
         del mock_check_run2.output
 
-        mock_check_suite.check_runs = [mock_check_run1, mock_check_run2]
-        mock_commit.get_check_suites.return_value = [mock_check_suite]
+        mock_commit.get_check_runs.return_value = [mock_check_run1, mock_check_run2]
         mock_repo.get_commit.return_value = mock_commit
         mock_repo.get_pull.return_value = mock_pr
         mock_github.get_repo.return_value = mock_repo
@@ -354,8 +352,7 @@ class TestGitHubClient:
         mock_repo = Mock()
         mock_file = Mock()
         mock_file.type = "file"
-        mock_file.content = "ZGVmIG1haW4oKToKICAgIHBhc3M="  # base64 encoded
-        mock_file.encoding = "base64"
+        mock_file.decoded_content = b"def main():\n    pass"  # raw bytes
 
         mock_repo.get_contents.return_value = mock_file
         mock_github.get_repo.return_value = mock_repo
@@ -368,10 +365,8 @@ class TestGitHubClient:
     def test_get_file_content_directory(self, client, mock_github):
         """Test that directories return None."""
         mock_repo = Mock()
-        mock_dir = Mock()
-        mock_dir.type = "dir"
-
-        mock_repo.get_contents.return_value = mock_dir
+        # Return a list to simulate directory contents
+        mock_repo.get_contents.return_value = [Mock()]  # Directory returns list
         mock_github.get_repo.return_value = mock_repo
 
         content = client.get_file_content("owner", "repo", "src/", "main")

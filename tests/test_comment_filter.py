@@ -84,6 +84,16 @@ class TestCommentFilter:
         assert result[0]["id"] == "thread1"
         assert not result[0]["is_resolved"]
         assert not result[0]["is_outdated"]
+
+    def test_filter_resolved_active(self, filter, sample_threads):
+        """Test filtering resolved active (non-outdated) comments."""
+        # Use "resolved_active" mode to get resolved but not outdated threads
+        result = filter.filter_comments(sample_threads, "resolved_active")
+        assert len(result) == 1
+        assert result[0]["id"] == "thread2"
+        assert result[0]["is_resolved"] is True
+        assert result[0]["is_outdated"] is False
+
     def test_filter_unresolved_outdated(self, filter, sample_threads):
         """Test filtering unresolved outdated comments."""
         result = filter.filter_comments(sample_threads, "unresolved_outdated")
@@ -93,13 +103,13 @@ class TestCommentFilter:
         assert result[0]["is_outdated"]
     def test_filter_by_path(self, filter, sample_threads):
         """Test filtering by file path."""
-        result = filter.filter_comments(sample_threads, "all", path="src/main.py")
+        result = filter.filter_by_path(sample_threads, "src/main.py")
         assert len(result) == 2
         assert all(thread["path"] == "src/main.py" for thread in result)
 
     def test_filter_by_author(self, filter, sample_threads):
         """Test filtering by author."""
-        result = filter.filter_comments(sample_threads, "all", author="reviewer1")
+        result = filter.filter_by_author(sample_threads, "reviewer1")
         assert len(result) == 2
         for thread in result:
             assert any(
@@ -108,7 +118,7 @@ class TestCommentFilter:
 
     def test_filter_by_keyword(self, filter, sample_threads):
         """Test filtering by keyword in comment body."""
-        result = filter.filter_comments(sample_threads, "all", keyword="fix")
+        result = filter.filter_by_keyword(sample_threads, "fix")
         assert len(result) == 2
         for thread in result:
             assert any(
@@ -117,9 +127,9 @@ class TestCommentFilter:
 
     def test_filter_combined_filters(self, filter, sample_threads):
         """Test combining multiple filters."""
-        result = filter.filter_comments(
-            sample_threads, "unresolved", path="src/main.py"
-        )
+        # First filter by unresolved, then by path
+        unresolved = filter.filter_comments(sample_threads, "unresolved")
+        result = filter.filter_by_path(unresolved, "src/main.py")
         assert len(result) == 1
         assert result[0]["id"] == "thread1"
         assert not result[0]["is_resolved"]
@@ -127,7 +137,7 @@ class TestCommentFilter:
 
     def test_filter_case_insensitive_keyword(self, filter, sample_threads):
         """Test that keyword filtering is case-insensitive."""
-        result = filter.filter_comments(sample_threads, "all", keyword="FIX")
+        result = filter.filter_by_keyword(sample_threads, "FIX")
         assert len(result) == 2
         # Should find both "fix" and "Fixed"
 
@@ -143,12 +153,12 @@ class TestCommentFilter:
 
     def test_filter_by_nonexistent_author(self, filter, sample_threads):
         """Test filtering by author that doesn't exist."""
-        result = filter.filter_comments(sample_threads, "all", author="nonexistent")
+        result = filter.filter_by_author(sample_threads, "nonexistent")
         assert len(result) == 0
 
     def test_filter_by_nonexistent_path(self, filter, sample_threads):
         """Test filtering by path that doesn't exist."""
-        result = filter.filter_comments(sample_threads, "all", path="nonexistent.py")
+        result = filter.filter_by_path(sample_threads, "nonexistent.py")
         assert len(result) == 0
 
     def test_get_filter_stats(self, filter, sample_threads):

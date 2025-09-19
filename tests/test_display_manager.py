@@ -13,7 +13,6 @@ class TestDisplayManager:
     """Test DisplayManager class."""
 
     @pytest.fixture
-    @pytest.fixture
     def display_manager(self):
         """Create a DisplayManager instance."""
         from rich.console import Console
