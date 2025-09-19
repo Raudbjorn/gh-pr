@@ -76,6 +76,8 @@ class TestCachingFlow(unittest.TestCase):
         value = cache_manager.get("short_ttl_key")
         self.assertIsNone(value)
 
+from datetime import datetime
+
     def test_cache_manager_with_pr_data_integration(self):
         """Test cache manager integration with PR data workflow."""
         # Mock GitHub client and PR manager
@@ -93,8 +95,8 @@ class TestCachingFlow(unittest.TestCase):
         mock_pr.title = "Test PR"
         mock_pr.state = "open"
         mock_pr.user.login = "testuser"
-        mock_pr.created_at = Mock()
-        mock_pr.updated_at = Mock()
+        mock_pr.created_at = datetime.now()
+        mock_pr.updated_at = datetime.now()
         mock_pr.merged = False
         mock_pr.merged_at = None
         mock_pr.mergeable = True
@@ -114,9 +116,17 @@ class TestCachingFlow(unittest.TestCase):
 
         mock_github.get_pull_request.return_value = mock_pr
 
+        # Verify cache key is being used correctly
+        expected_cache_key = "pr_data_owner_repo_123"
+        
         # First call should fetch from API and cache
         pr_data1 = pr_manager.fetch_pr_data("owner", "repo", 123)
         mock_github.get_pull_request.assert_called_once()
+        
+        # Verify data was cached
+        cached_value = cache_manager.get(expected_cache_key)
+        self.assertIsNotNone(cached_value)
+        self.assertEqual(cached_value["number"], 123)
 
         # Second call should use cache
         pr_data2 = pr_manager.fetch_pr_data("owner", "repo", 123)
@@ -127,7 +137,6 @@ class TestCachingFlow(unittest.TestCase):
         self.assertEqual(pr_data1, pr_data2)
         self.assertEqual(pr_data1["number"], 123)
         self.assertEqual(pr_data1["title"], "Test PR")
-
     def test_cache_manager_key_generation_consistency(self):
         """Test cache key generation consistency and collision avoidance."""
         cache_manager = CacheManager(enabled=True, location=str(self.cache_dir))
