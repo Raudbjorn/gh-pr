@@ -232,7 +232,7 @@ class TestTokenExpiration:
 
         assert expiration is not None
         assert expiration["expired"] is False
-        assert expiration["days_remaining"] == 29 or expiration["days_remaining"] == 30
+        assert expiration["days_remaining"] in [29, 30]
         assert expiration["warning"] is False
 
     @patch("gh_pr.auth.token.Github")
