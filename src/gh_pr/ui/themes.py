@@ -392,8 +392,10 @@ class ThemeManager:
         """
         css_vars = self.get_textual_css_variables()
         css_lines = [":root {"]
-        for var_name, color_value in css_vars.items():
-            css_lines.append(f"  {var_name}: {color_value};")
+        css_lines.extend(
+            f"  {var_name}: {color_value};"
+            for var_name, color_value in css_vars.items()
+        )
         css_lines.append("}")
         return "\n".join(css_lines)
 
