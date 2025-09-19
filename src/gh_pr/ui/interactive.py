@@ -379,8 +379,8 @@ class GhPrTUI(App):
         """
         try:
             # Try to parse as PR identifier
-            owner, repo, pr_number = self.pr_manager.parse_pr_identifier(
-                query, self.current_repo
+            owner, repo, pr_number = await asyncio.to_thread(
+                self.pr_manager.parse_pr_identifier, query, self.current_repo
             )
 
             # Update current repo
