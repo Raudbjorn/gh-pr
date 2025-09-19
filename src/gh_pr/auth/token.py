@@ -181,8 +181,9 @@ class TokenManager:
                     "remaining": getattr(core, "remaining", "N/A"),
                     "reset": datetime.fromtimestamp(core.reset.timestamp(), timezone.utc).isoformat() if getattr(core, "reset", None) else None,
                 }
-            except Exception:
-                # Fallback if rate limit API changes
+            except (GithubException, KeyError, AttributeError) as e:
+                # Fallback if rate limit API changes or data is missing
+                logger.warning(f"Could not retrieve rate limit info: {e}")
                 info["rate_limit"] = {
                     "limit": "N/A",
                     "remaining": "N/A",
