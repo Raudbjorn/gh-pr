@@ -310,6 +310,23 @@ class TestExportMenu:
             menu.on_switch_changed(mock_event)
             assert menu.options[switch_id] == value
 
+        # Test invalid switch id
+        invalid_switch_id = "invalid_option"
+        mock_switch = Mock()
+        mock_switch.id = invalid_switch_id
+        mock_event = Mock()
+        mock_event.switch = mock_switch
+        mock_event.value = True
+
+        # Capture current options before the event
+        options_before = menu.options.copy()
+        try:
+            menu.on_switch_changed(mock_event)
+        except Exception as e:
+            assert False, f"on_switch_changed raised an exception for invalid switch id: {e}"
+        # Ensure options dict is unchanged for invalid key
+        assert menu.options == options_before
+
     @patch.object(ExportMenu, 'post_message')
     def test_export_button(self, mock_post_message):
         """Test export button."""
