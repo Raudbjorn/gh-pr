@@ -339,7 +339,7 @@ def _display_detailed_token_info(token_manager: TokenManager):
             status = "[green]✓[/green]" if has_perm else "[red]✗[/red]"
             console.print(f"  {status} {description}")
 
-    except Exception as e:
+    except GithubException as e:
         console.print(f"[red]Error testing permissions: {e}[/red]")
 
     console.print()  # Empty line at the end
