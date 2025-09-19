@@ -151,8 +151,7 @@ Launch the interactive Terminal User Interface with `gh-pr --tui` for a full-fea
 | `g` | Top | Go to first item |
 | `G` | Bottom | Go to last item |
 | `Enter` | Select | View PR details |
-| `/` | Search | Search PRs or comments |
-| `f` | Filter | Open filter menu |
+| `/` | Search | Focus the search input |
 | `s` | Sort | Open sort menu |
 | `e` | Export | Export data |
 | `c` | Copy | Copy to clipboard |
