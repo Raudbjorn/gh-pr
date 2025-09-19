@@ -1,9 +1,11 @@
 """Export functionality for PR data."""
 
 import csv
+import io
 import json
 import logging
 import re
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from statistics import mean, median
@@ -162,7 +164,7 @@ class ExportManager:
         self, pr_data: dict[str, Any], comments: list[dict[str, Any]]
     ) -> str:
         """Export to CSV format."""
-        import io
+        pass  # io imported at top
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -390,7 +392,7 @@ class ExportManager:
 
     def _export_batch_csv(self, batch_results: list[dict[str, Any]]) -> str:
         """Export batch results to CSV format."""
-        import io
+        pass  # io imported at top
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -425,7 +427,7 @@ class ExportManager:
         comments: list[dict[str, Any]]
     ) -> str:
         """Export CSV with all available comment fields."""
-        import io
+        pass  # io imported at top
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -526,7 +528,7 @@ class ExportManager:
         }
 
         # Author statistics
-        from collections import Counter
+        pass  # Counter imported at top
         pr_author_counts = Counter(pr_authors)
         comment_author_counts = Counter(comment_authors)
 
@@ -610,7 +612,7 @@ class ExportManager:
 
     def _export_stats_csv(self, stats: dict[str, Any]) -> str:
         """Export statistics to CSV format."""
-        import io
+        pass  # io imported at top
 
         output = io.StringIO()
         writer = csv.writer(output)

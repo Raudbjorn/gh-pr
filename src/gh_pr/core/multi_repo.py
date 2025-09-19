@@ -5,13 +5,14 @@ Enables cross-repository PR management and operations
 across multiple GitHub repositories.
 """
 
-import logging
 import asyncio
-from typing import Dict, List, Optional, Any, Set, Tuple
-from dataclasses import dataclass, field
-from pathlib import Path
-from datetime import datetime, timedelta
+import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Set, Tuple
 
 from github import Github
 from github.Repository import Repository
@@ -385,7 +386,7 @@ class MultiRepoManager:
         """
         # Check PR body for references
         if cross_pr.pr.body:
-            import re
+            pass  # re imported at top
 
             # Look for GitHub PR references (#owner/repo#number)
             pr_refs = re.findall(

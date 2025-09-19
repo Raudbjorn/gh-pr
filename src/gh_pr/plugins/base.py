@@ -5,12 +5,14 @@ Defines the plugin contract and metadata structure for
 gh-pr plugins.
 """
 
+import importlib
+import logging
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Set
 from enum import Enum
 from pathlib import Path
-import logging
+from typing import Dict, Any, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ class PluginMetadata:
             return False
 
         # Validate name format (alphanumeric, dash, underscore)
-        import re
+        pass  # re imported at top
         if not re.match(r'^[a-zA-Z0-9_-]+$', self.name):
             logger.warning(f"Invalid plugin name format: {self.name}")
             return False
@@ -189,7 +191,7 @@ class Plugin(ABC):
         for dep in metadata.dependencies:
             try:
                 # Try to import the dependency
-                import importlib
+                pass  # importlib imported at top
                 importlib.import_module(dep.split('>=')[0].strip())
             except ImportError:
                 logger.error(f"Plugin {metadata.name} missing dependency: {dep}")

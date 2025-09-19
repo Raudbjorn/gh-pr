@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from github import GithubException
 from github.Auth import Token as GithubToken
@@ -331,7 +331,9 @@ class TestTokenManager(unittest.TestCase):
 
         # Mock repos
         mock_repo = Mock()
-        mock_repos = [mock_repo]
+        mock_repos = Mock()
+        mock_repos.totalCount = 1
+        mock_repos.__getitem__ = Mock(return_value=mock_repo)
         mock_user.get_repos.return_value = mock_repos
         mock_repo.get_pulls.return_value = [Mock()]
         mock_repo.get_issues.return_value = [Mock()]
@@ -379,8 +381,8 @@ class TestTokenManager(unittest.TestCase):
         token = "github_pat_valid"
         manager = TokenManager(token=token)
 
-        # Mock future expiration date
-        future_date = datetime.now(timezone.utc).replace(day=datetime.now().day + 30)
+        # Mock future expiration date (add 30 days safely)
+        future_date = datetime.now(timezone.utc) + timedelta(days=30)
         mock_info = {
             "type": "Fine-grained Personal Access Token",
             "expires_at": future_date.isoformat()
@@ -400,7 +402,7 @@ class TestTokenManager(unittest.TestCase):
         manager = TokenManager(token=token)
 
         # Mock expiration date in 3 days (should trigger warning)
-        future_date = datetime.now(timezone.utc).replace(day=datetime.now().day + 3)
+        future_date = datetime.now(timezone.utc) + timedelta(days=3)
         mock_info = {
             "type": "Fine-grained Personal Access Token",
             "expires_at": future_date.isoformat()
@@ -427,6 +429,61 @@ class TestTokenManager(unittest.TestCase):
         self.assertIsInstance(GH_CLI_AUTH_TOKEN_CMD, list)
         self.assertEqual(GH_CLI_AUTH_STATUS_CMD[0], "gh")
         self.assertEqual(GH_CLI_AUTH_TOKEN_CMD[0], "gh")
+
+    @patch('gh_pr.auth.token.subprocess.run')
+    def test_gh_cli_token_fallback_from_auth_token_command(self, mock_run):
+        """Test fallback to gh auth token command when auth status fails."""
+        # Mock auth status failing
+        mock_result_status = Mock()
+        mock_result_status.returncode = 1
+        mock_result_status.stdout = "Not logged in"
+
+        # Mock auth token succeeding
+        mock_result_token = Mock()
+        mock_result_token.returncode = 0
+        mock_result_token.stdout = "ghp_fallback_token_123\n"
+
+        mock_run.side_effect = [mock_result_status, mock_result_token]
+
+        manager = TokenManager()
+        self.assertEqual(manager.token, 'ghp_fallback_token_123')
+
+        # Verify both commands were called
+        self.assertEqual(mock_run.call_count, 2)
+
+    def test_missing_token_error_message_details(self):
+        """Test that missing token error provides helpful guidance."""
+        with self.assertRaises(ValueError) as context:
+            TokenManager()
+
+        error_message = str(context.exception)
+
+        # Verify the error message contains helpful information
+        self.assertIn("No GitHub token found", error_message)
+        self.assertIn("--token", error_message)
+        self.assertIn("GH_TOKEN", error_message)
+        self.assertIn("GITHUB_TOKEN", error_message)
+        self.assertIn("gh CLI", error_message)
+
+    @patch('gh_pr.auth.token.subprocess.run')
+    def test_gh_cli_both_commands_fail_gracefully(self, mock_run):
+        """Test that when both gh CLI commands fail, we get appropriate error."""
+        # Mock both commands failing
+        mock_result_status = Mock()
+        mock_result_status.returncode = 1
+        mock_result_status.stdout = ""
+
+        mock_result_token = Mock()
+        mock_result_token.returncode = 1
+        mock_result_token.stdout = ""
+
+        mock_run.side_effect = [mock_result_status, mock_result_token]
+
+        with self.assertRaises(ValueError) as context:
+            TokenManager()
+
+        error_message = str(context.exception)
+        self.assertIn("No GitHub token found", error_message)
 
 
 if __name__ == '__main__':

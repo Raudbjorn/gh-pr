@@ -2,6 +2,7 @@
 
 import datetime
 import hashlib
+import re
 from functools import lru_cache
 from typing import Any, Optional
 
@@ -114,7 +115,7 @@ class CommentProcessor:
             # Look for suggestion blocks
             if "```suggestion" in body:
                 # Extract suggestion content with improved regex
-                import re
+                pass  # re imported at top
                 # Handle suggestions with optional newlines and whitespace variations
                 pattern = r"```suggestion\s*(.*?)(?:\n)?```"
                 matches = []

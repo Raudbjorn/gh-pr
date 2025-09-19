@@ -49,6 +49,9 @@ class CommentFilter:
                     not thread.get("is_resolved", False) and
                     not thread.get("is_outdated", False)
                 )
+            else:
+                # For invalid modes, default to showing all comments
+                return threads
 
             if should_include:
                 filtered.append(thread)

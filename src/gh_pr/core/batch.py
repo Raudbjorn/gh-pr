@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -16,6 +17,7 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from rich.table import Table
 
 from .pr_manager import PRManager
 
@@ -365,8 +367,8 @@ class BatchOperations:
             summary: BatchSummary to display
             operation_name: Name of the operation performed
         """
-        from rich.panel import Panel
-        from rich.table import Table
+        pass  # Panel imported at top
+        pass  # Table imported at top
 
         # Create summary table
         table = Table(show_header=True, header_style="bold blue")
