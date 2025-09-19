@@ -199,11 +199,11 @@ class TestCommentFilter:
             }
         ]
 
-        result = filter.filter_comments(threads, "all", author="author1")
+        result = filter.filter_by_author(threads, "author1")
         assert len(result) == 1
 
-        result = filter.filter_comments(threads, "all", author="author2")
+        result = filter.filter_by_author(threads, "author2")
         assert len(result) == 1
 
-        result = filter.filter_comments(threads, "all", author="author3")
+        result = filter.filter_by_author(threads, "author3")
         assert len(result) == 0
