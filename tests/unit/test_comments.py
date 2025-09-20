@@ -8,7 +8,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
-from gh_pr.core.comments import CommentManager
+from gh_pr.core.comments import CommentProcessor as CommentManager
 
 
 class TestCommentManager(unittest.TestCase):
