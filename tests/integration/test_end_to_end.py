@@ -16,6 +16,7 @@ from gh_pr.core.pr_manager import PRManager
 from gh_pr.core.github import GitHubClient
 from gh_pr.webhooks.server import WebhookServer
 from gh_pr.webhooks.handlers import WebhookHandler
+from gh_pr.webhooks.events import WebhookEvent, EventType
 from gh_pr.plugins.manager import PluginManager
 from gh_pr.core.multi_repo import MultiRepoManager
 from gh_pr.utils.notifications import NotificationManager
@@ -55,8 +56,7 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
         webhook_config.rate_window = 60
 
         webhook_handler = WebhookHandler()
-        webhook_server = WebhookServer(webhook_config)
-        webhook_server.handler = webhook_handler
+        webhook_server = WebhookServer(webhook_config, webhook_handler)
 
         # Setup notification manager
         notif_manager = NotificationManager()
@@ -91,11 +91,12 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
             return {'processed': True}
 
         # Register handler
-        from gh_pr.webhooks.events import EventType
         webhook_handler.register_handler(EventType.PULL_REQUEST, handle_pr_event)
 
-        # Simulate webhook event
-        event = webhook_handler.parse_github_event(
+        # Create webhook event directly
+        event = WebhookEvent(
+            type=EventType.PULL_REQUEST,
+            delivery_id='test-delivery-123',
             headers={'X-GitHub-Event': 'pull_request'},
             payload={
                 'action': 'opened',

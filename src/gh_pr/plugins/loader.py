@@ -183,12 +183,18 @@ class PluginLoader:
         spec.loader.exec_module(module)
 
         # Find Plugin subclass in module
+        # Skip base plugin classes that may be imported
+        from .base import (Plugin, PREventPlugin, NotificationPlugin,
+                          CommentFilterPlugin, DisplayFormatterPlugin)
+        base_classes = {Plugin, PREventPlugin, NotificationPlugin,
+                       CommentFilterPlugin, DisplayFormatterPlugin}
+
         plugin_class = None
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
             if (isinstance(attr, type) and
                 issubclass(attr, Plugin) and
-                attr != Plugin):
+                attr not in base_classes):
                 plugin_class = attr
                 break
 
@@ -263,6 +269,7 @@ class PluginLoader:
             except Exception as e:
                 logger.error(f"Plugin {name} initialization error: {e}", exc_info=True)
                 results[name] = False
+                self._plugin_errors[name] = f"Initialization error: {e}"
 
         return results
 

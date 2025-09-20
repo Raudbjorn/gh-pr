@@ -233,9 +233,14 @@ class NotificationManager:
             return False
 
         try:
+            # Security: Commands are from hardcoded NOTIFY_COMMANDS dictionary
+            # Title and message are user input but used with shell=False (default)
+            # This prevents shell injection as arguments are passed directly to the process
             commands = NOTIFY_COMMANDS['linux'][self._notifier]
             cmd = []
 
+            # Replace placeholders with user input
+            # Safe because we use subprocess with shell=False (default)
             for part in commands:
                 if '{title}' in part:
                     cmd.append(part.format(title=title))
@@ -255,8 +260,9 @@ class NotificationManager:
                 if self.config.icon_path and self.config.icon_path.exists():
                     cmd.extend(['-i', str(self.config.icon_path)])
 
+            # Security: Using subprocess.run with shell=False (default) prevents injection
             result = subprocess.run(
-                cmd,
+                cmd,  # Safe: hardcoded command with user strings as arguments
                 capture_output=True,
                 text=True,
                 timeout=5

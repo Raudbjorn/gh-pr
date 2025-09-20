@@ -18,7 +18,7 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
         parallel: Enable parallel test execution
         marker: Specific pytest marker to run
     """
-    cmd = ["python", "-m", "pytest"]
+    cmd = [sys.executable, "-m", "pytest"]
 
     # Add test paths based on type
     if test_type == "unit":

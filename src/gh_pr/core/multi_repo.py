@@ -220,7 +220,7 @@ class MultiRepoManager:
         """
         if repo.full_name not in self._repo_clients:
             self._repo_clients[repo.full_name] = \
-                self.github_client._github.get_repo(repo.full_name)
+                self.github_client.get_repository(repo.owner, repo.name)
 
         return self._repo_clients[repo.full_name]
 
