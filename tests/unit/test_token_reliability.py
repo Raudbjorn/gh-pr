@@ -190,9 +190,8 @@ class TestTokenManagerReliability:
     @patch.dict('os.environ', {'GH_TOKEN': 'ghp_env_token_123456789'})
     def test_token_manager_with_gh_token_env(self):
         """Test TokenManager with GH_TOKEN environment variable."""
-        token_manager = TokenManager(token="dummy")  # noqa: S106
+        token_manager = TokenManager()
         assert token_manager.get_token() == "ghp_env_token_123456789"
-
     @patch.dict('os.environ', {'GITHUB_TOKEN': 'ghp_github_env_token_123456789'})
     def test_token_manager_with_github_token_env(self):
         """Test TokenManager with GITHUB_TOKEN environment variable."""
