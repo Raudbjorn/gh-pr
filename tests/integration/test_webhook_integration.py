@@ -34,17 +34,21 @@ class TestWebhookIntegration(AioHTTPTestCase):
         # Create server and handler
         self.webhook_handler = WebhookHandler()
         self.server = WebhookServer(self.config, self.webhook_handler)
-        # Register test handler
+        # Register test handler via object API
         self.test_handler_called = False
         self.test_handler_event = None
 
-        async def test_handler(event):
-            self.test_handler_called = True
-            self.test_handler_event = event
-            return {'status': 'handled', 'event_id': event.delivery_id}
+        class _PRHandler:
+            def __init__(self, outer):
+                self.outer = outer
+            async def can_handle(self, event):
+                return event.type == EventType.PULL_REQUEST
+            async def handle(self, event):
+                self.outer.test_handler_called = True
+                self.outer.test_handler_event = event
+                return {'status': 'handled', 'event_id': event.delivery_id}
 
-        self.webhook_handler.register_handler(EventType.PULL_REQUEST, test_handler)
-
+        self.webhook_handler.add_handler(_PRHandler(self))
         # Create app
         app = web.Application()
         app.router.add_post('/webhook', self.server._handle_webhook)
