@@ -380,8 +380,8 @@ class DisplayManager:
         Args:
             thread: Thread data dictionary
         """
-        # Delegate to existing _display_thread method
-        self._display_thread(thread)
+        # Delegate to existing _display_thread method with default parameters
+        self._display_thread(thread, show_code=True, context_lines=3)
 
     def format_timestamp(self, ts: Any) -> str:
         """
