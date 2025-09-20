@@ -168,10 +168,13 @@ enabled = false
 
         # Test 2: Environment variable has priority over config
         with patch.dict(os.environ, {"GH_TOKEN": "env_token"}):
-            with patch("gh_pr.auth.token.TokenManager.__init__", return_value=None) as mock_init:
-                with patch("gh_pr.auth.token.TokenManager.validate_token", return_value=True):
-                    with patch("gh_pr.auth.token.TokenManager.get_token_info", return_value={"type": "test"}):
-                        result = runner.invoke(main, ["--config", temp_config_file, "--token-info"])
+            with patch.multiple(
+                "gh_pr.auth.token.TokenManager",
+                __init__=Mock(return_value=None),
+                validate_token=Mock(return_value=True),
+                get_token_info=Mock(return_value={"type": "test"})
+            ):
+                result = runner.invoke(main, ["--config", temp_config_file, "--token-info"])
 
 
 class TestTokenPermissions:
