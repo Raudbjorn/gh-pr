@@ -31,7 +31,7 @@ class TestClipboardManager(unittest.TestCase):
 
         # Mock successful subprocess execution
         mock_process = Mock()
-        mock_process.communicate.return_value = (None, None)
+        mock_process.communicate.return_value = (b"", b"")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
 
@@ -41,7 +41,11 @@ class TestClipboardManager(unittest.TestCase):
         self.assertTrue(result)
         mock_popen.assert_called_once()
         mock_process.communicate.assert_called_once_with(input=text.encode('utf-8'), timeout=5)
-
+        # Ensure safe invocation (no shell; no unsupported kwargs like 'timeout')
+        args, kwargs = mock_popen.call_args
+        self.assertEqual(args[0], ['pbcopy'])
+        self.assertFalse(kwargs.get('shell', True))
+        self.assertNotIn('timeout', kwargs)
     def test_clipboard_availability(self):
         """Test clipboard availability check."""
         clipboard = ClipboardManager()
