@@ -297,8 +297,9 @@ def _display_detailed_token_info(token_manager: TokenManager):
             try:
                 reset_dt = datetime.fromisoformat(reset_time.replace('Z', '+00:00'))
                 console.print(f"  Resets: {reset_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            except (ValueError, AttributeError):
-                pass  # Skip if we can't parse the reset time
+            except (ValueError, AttributeError) as e:
+                # Log parsing issue but continue gracefully
+                console.print(f"  [dim]Reset time unavailable[/dim]")
 
     # Display expiration info
     expiration = token_manager.check_expiration()
