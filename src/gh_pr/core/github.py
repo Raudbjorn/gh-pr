@@ -17,7 +17,8 @@ class GitHubClient:
         Args:
             token: GitHub authentication token
         """
-        self.token = token  # Store token publicly for GraphQL client
+        # Store token privately to avoid accidental exposure
+        self._token = token
         auth = Auth.Token(token)
         self.github = Github(auth=auth)
         self._user = None
