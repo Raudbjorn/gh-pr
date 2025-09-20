@@ -301,16 +301,19 @@ class MultiRepoManager:
             if filters:
                 combined_filters.update(filters)
 
-            # Fetch PRs
-            prs = repo_client.get_pulls(
-                state=state,
-                sort=combined_filters.get('sort', 'created'),
-                direction=combined_filters.get('direction', 'desc'),
-                base=combined_filters.get('base', repo.default_branch)
-            )[:repo.pr_limit]
+            # Fetch PRs in a thread to avoid blocking the event loop
+            loop = asyncio.get_running_loop()
 
-            return prs
+            def _fetch():
+                paged = repo_client.get_pulls(
+                    state=state,
+                    sort=combined_filters.get('sort', 'created'),
+                    direction=combined_filters.get('direction', 'desc'),
+                    base=combined_filters.get('base', repo.default_branch),
+                )
+                return list(paged[:repo.pr_limit])
 
+            return await loop.run_in_executor(self._executor, _fetch)
         except Exception as e:
             logger.error(f"Error fetching PRs for {repo.full_name}: {e}")
             return []
