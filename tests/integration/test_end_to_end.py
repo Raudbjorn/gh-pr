@@ -108,13 +108,10 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
         )
 
         # Process event
-        results = await webhook_handler.handle_event(event)
-
+        results = await webhook_handler.handle(event)
         self.assertTrue(workflow_executed)
         self.assertEqual(pr_processed, 123)
-        self.assertIn('auto_label', results[0])
-        self.assertEqual(results[0]['auto_label'], 'bug')
-
+        self.assertEqual(results['handlers_executed'][0]['result'].get('auto_label'), 'bug')
     async def test_multi_repo_search_and_sync(self):
         """Test multi-repo search and label sync workflow."""
         # Add repositories to manager
