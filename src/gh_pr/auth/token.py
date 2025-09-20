@@ -374,7 +374,11 @@ class TokenManager:
             return False
 
         try:
-            # Store token metadata using first 10 chars as key
+            # Store token metadata using SHA-256 hash of the token as key
+            # We use a hash to avoid storing the raw token, and truncate to 16 hex
+            # characters (64 bits) for storage efficiency. While this increases
+            # collision risk vs full hash, it's sufficient for typical use cases
+            # with small numbers of tokens.
             token_key = hashlib.sha256(self.token.encode()).hexdigest()[:16]
 
             metadata = {
