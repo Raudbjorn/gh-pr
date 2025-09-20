@@ -112,6 +112,49 @@ enabled = false
         # Should exit with error when user doesn't confirm
         assert result.exit_code != 0
 
+    def test_expired_token_user_confirms_continue(self, mock_github):
+        """Test expired token with user confirmation to continue."""
+        runner = CliRunner()
+
+        # Mock expired token
+        with patch("gh_pr.auth.token.TokenManager.check_expiration") as mock_exp:
+            mock_exp.return_value = {
+                "expired": True,
+                "expires_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                "days_remaining": -1,
+                "warning": False,
+            }
+
+            # Simulate user confirmation with 'y' input
+            with patch.dict(os.environ, {"GH_TOKEN": "github_pat_expired_token"}):  # noqa: S106
+                result = runner.invoke(main, ["--token-info"], input="y\n")
+
+        # The CLI should continue even with expired token when user confirms
+        assert "expired" in result.output.lower()
+
+    def test_gh_cli_token_fallback(self, mock_github):
+        """Test that gh CLI token is used as fallback when other sources unavailable."""
+        runner = CliRunner()
+
+        # Clear env vars and no config file
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("gh_pr.auth.token.TokenManager._get_gh_cli_token") as mock_gh:
+                mock_gh.return_value = "ghp_gh_cli_token"
+
+                with patch("gh_pr.auth.token.TokenManager.validate_token") as mock_val:
+                    mock_val.return_value = True
+
+                    with patch("gh_pr.auth.token.TokenManager.get_token_info") as mock_info:
+                        mock_info.return_value = {
+                            "type": "Classic Personal Access Token",
+                            "rate_limit": {"limit": 5000, "remaining": 4999},
+                        }
+
+                        result = runner.invoke(main, ["--token-info"])
+
+        assert result.exit_code == 0
+        assert "Token Type:" in result.output
+
     def test_token_priority_order_integration(self, temp_config_file, mock_github):
         """Test token discovery priority order in full CLI context."""
         runner = CliRunner()
@@ -314,3 +357,20 @@ class TestCLITokenFeatures:
 
         assert result.exit_code == 1
         assert "Invalid or expired GitHub token" in result.output
+
+    def test_missing_token_error_message(self):
+        """Test error message when no token is provided."""
+        runner = CliRunner()
+
+        # Clear all token sources
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("gh_pr.auth.token.TokenManager._get_gh_cli_token") as mock_gh:
+                mock_gh.return_value = None
+
+                with patch("gh_pr.auth.token.ConfigManager.get") as mock_cfg:
+                    mock_cfg.return_value = None
+
+                    result = runner.invoke(main, ["53"])
+
+        assert result.exit_code != 0
+        assert "token" in result.output.lower() or "authentication" in result.output.lower()
