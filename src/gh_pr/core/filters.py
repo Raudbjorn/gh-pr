@@ -14,10 +14,15 @@ class CommentFilter:
 
         Args:
             threads: List of thread dictionaries
-            mode: Filter mode
+            mode: Filter mode ('all', 'unresolved', 'resolved_active',
+                  'unresolved_outdated', 'current_unresolved')
 
         Returns:
             Filtered list of threads
+
+        Note:
+            If an unrecognized mode is provided, defaults to 'all' behavior
+            and returns all threads.
         """
         if mode == "all":
             return threads
@@ -48,6 +53,9 @@ class CommentFilter:
                     not thread.get("is_resolved", False) and
                     not thread.get("is_outdated", False)
                 )
+            else:
+                # Unknown mode - default to showing all threads (like 'all' mode)
+                should_include = True
 
             if should_include:
                 filtered.append(thread)
