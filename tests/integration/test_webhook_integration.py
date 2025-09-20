@@ -14,7 +14,7 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
 from gh_pr.webhooks.server import WebhookServer
-from gh_pr.webhooks.handler import WebhookHandler
+from gh_pr.webhooks.handlers import WebhookHandler
 from gh_pr.webhooks.events import EventType, WebhookEvent
 
 

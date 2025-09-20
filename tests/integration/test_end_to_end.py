@@ -12,10 +12,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 
-from gh_pr.core.pr_manager import EnhancedPRManager
+from gh_pr.core.pr_manager import PRManager
 from gh_pr.core.github import GitHubClient
 from gh_pr.webhooks.server import WebhookServer
-from gh_pr.webhooks.handler import WebhookHandler
+from gh_pr.webhooks.handlers import WebhookHandler
 from gh_pr.plugins.manager import PluginManager
 from gh_pr.core.multi_repo import MultiRepoManager
 from gh_pr.utils.notifications import NotificationManager
@@ -30,11 +30,15 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
 
         # Mock GitHub client
         self.mock_github = Mock()
-        self.mock_github._github = Mock()
+        self.mock_github.github = Mock()
+
+        # Mock cache manager
+        self.mock_cache = Mock()
+        self.mock_cache.enabled = False
 
         # Create managers
-        self.pr_manager = EnhancedPRManager(self.mock_github, 'owner/repo')
-        self.multi_repo_manager = MultiRepoManager(self.mock_github)
+        self.pr_manager = PRManager(self.mock_github, self.mock_cache)
+        self.multi_repo_manager = MultiRepoManager(self.mock_github, self.mock_cache)
 
     def tearDown(self):
         """Clean up test environment."""
@@ -371,6 +375,7 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
             repo_config = Mock()
             repo_config.full_name = f"org/repo{i}"
             repo_config.pr_limit = 10
+            repo_config.aliases = []  # Add empty aliases list
             repos.append(repo_config)
 
             self.multi_repo_manager.add_repository(repo_config)
