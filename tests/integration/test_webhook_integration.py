@@ -29,12 +29,11 @@ class TestWebhookIntegration(AioHTTPTestCase):
         self.config.secret = "test_secret_key"
         self.config.rate_limit = 100
         self.config.rate_window = 60
+        self.config.allowed_events = {EventType.PULL_REQUEST, EventType.ISSUES, EventType.PUSH}
 
         # Create server and handler
         self.webhook_handler = WebhookHandler()
-        self.server = WebhookServer(self.config)
-        self.server.handler = self.webhook_handler
-
+        self.server = WebhookServer(self.config, self.webhook_handler)
         # Register test handler
         self.test_handler_called = False
         self.test_handler_event = None
