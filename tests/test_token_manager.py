@@ -345,15 +345,13 @@ class TestPermissions:
         manager = TokenManager(token="ghp_classic_token")
         # Note: In real implementation, scopes would be set from API
         # For testing, we'd need to mock the scope retrieval
-        manager._token_info = {
+        with patch.object(manager, "get_token_info", return_value={
             "type": "Classic Personal Access Token",
             "scopes": ["repo", "write:discussion"],
-        }
-
-        assert manager.has_permissions(["repo"]) is True
-        assert manager.has_permissions(["repo", "write:discussion"]) is True
-        assert manager.has_permissions(["admin:org"]) is False
-
+        }):
+            assert manager.has_permissions(["repo"]) is True
+            assert manager.has_permissions(["repo", "write:discussion"]) is True
+            assert manager.has_permissions(["admin:org"]) is False
     @patch("gh_pr.auth.token.Github")
     def test_has_permissions_fine_grained_token(self, mock_github_class):
         """Test permission checking for fine-grained token."""
