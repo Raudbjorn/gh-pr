@@ -147,16 +147,16 @@ class TestCommentFilterPlugin(CommentFilterPlugin):
         }
 
         pr_results = await manager.dispatch_pr_event(pr_event)
-        self.assertIn('ghpr_plugin_pr_handler', pr_results)
-        self.assertEqual(pr_results['ghpr_plugin_pr_handler']['pr_id'], 123)
+        self.assertIn('pr_handler', pr_results)
+        self.assertEqual(pr_results['pr_handler']['pr_id'], 123)
 
         # Test notification dispatch
         notif_results = await manager.send_notification(
             "Test Title",
             "Test Message"
         )
-        self.assertIn('ghpr_plugin_notifier', notif_results)
-        self.assertTrue(notif_results['ghpr_plugin_notifier'])
+        self.assertIn('notifier', notif_results)
+        self.assertTrue(notif_results['notifier'])
 
         # Test comment filtering
         comments = [
@@ -244,8 +244,8 @@ class FailingPlugin(Plugin):
 
         # Working plugin should still function
         notif_results = await manager.send_notification("Test", "Message")
-        self.assertIn('ghpr_plugin_working', notif_results)
-        self.assertTrue(notif_results['ghpr_plugin_working'])
+        self.assertIn('working', notif_results)
+        self.assertTrue(notif_results['working'])
 
     async def test_plugin_health_monitoring(self):
         """Test plugin health check functionality."""
