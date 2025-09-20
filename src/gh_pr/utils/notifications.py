@@ -172,6 +172,10 @@ class NotificationManager:
             logger.debug(f"Plyer notification failed: {e}")
             return False
 
+    def _as_quote(self, s: str) -> str:
+        # Escape backslashes and double quotes for AppleScript string literals
+        return '"' + str(s).replace('\\', '\\\\').replace('"', '\\"') + '"'
+
     async def _notify_macos(
         self,
         title: str,
@@ -190,10 +194,10 @@ class NotificationManager:
             True if successful
         """
         try:
-            # Format the AppleScript command
-            script = f'display notification "{message}" with title "{title}"'
+            # Build AppleScript with proper quoting
+            script = f'display notification {self._as_quote(message)} with title {self._as_quote(title)}'
             if subtitle:
-                script += f' subtitle "{subtitle}"'
+                script += f' subtitle {self._as_quote(subtitle)}'
 
             if self.config.sound:
                 script += ' sound name "default"'
@@ -210,7 +214,6 @@ class NotificationManager:
         except Exception as e:
             logger.debug(f"macOS notification failed: {e}")
             return False
-
     async def _notify_linux(
         self,
         title: str,
