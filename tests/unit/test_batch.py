@@ -186,15 +186,12 @@ class TestBatchOperations:
 
         assert len(results) == 2
 
-        # Check results
-        result1, result2 = results
-        assert result1.pr_number == 1
-        assert result1.success is True
-        assert result1.result == "result_1"
-
-        assert result2.pr_number == 2
-        assert result2.success is True
-        assert result2.result == "result_2"
+        # Check results (order-independent)
+        results_by_pr = {r.pr_number: r for r in results}
+        assert results_by_pr[1].success is True
+        assert results_by_pr[1].result == "result_1"
+        assert results_by_pr[2].success is True
+        assert results_by_pr[2].result == "result_2"
 
         # Should have rate limited (called sleep once between operations)
         assert mock_sleep.call_count >= 1
