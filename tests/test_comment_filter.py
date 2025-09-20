@@ -127,9 +127,9 @@ class TestCommentFilter:
 
     def test_filter_combined_filters(self, filter, sample_threads):
         """Test combining multiple filters."""
-        # First filter by unresolved, then by path
-        unresolved = filter.filter_comments(sample_threads, "unresolved")
-        result = filter.filter_by_path(unresolved, "src/main.py")
+        # First filter by current_unresolved (not outdated), then by path
+        current_unresolved = filter.filter_comments(sample_threads, "current_unresolved")
+        result = filter.filter_by_path(current_unresolved, "src/main.py")
         assert len(result) == 1
         assert result[0]["id"] == "thread1"
         assert not result[0]["is_resolved"]
