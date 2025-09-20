@@ -242,7 +242,12 @@ class ConfigManager:
         """
         Merge additional configuration.
 
+        Note:
+            This method modifies the existing configuration in place.
+            The merge is recursive for nested dictionaries. Values from
+            additional_config will override existing values with the same key.
+
         Args:
-            additional_config: Configuration to merge
+            additional_config: Configuration to merge into current config
         """
         self._merge_config(self.config, additional_config)

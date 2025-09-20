@@ -35,6 +35,17 @@ class TokenManager:
         self._token_info: Optional[dict[str, Any]] = None
         self._expiration_info: Optional[dict[str, Any]] = None
 
+    def _get_token_key(self) -> str:
+        """
+        Get consistent token key for config storage.
+
+        Returns:
+            SHA-256 hash of token truncated to 16 hex characters (64 bits).
+            This provides sufficient uniqueness for typical use cases while
+            avoiding storing raw token material.
+        """
+        return hashlib.sha256(self.token.encode()).hexdigest()[:16]
+
     def _get_token(self, token: Optional[str] = None) -> str:
         """
         Get GitHub token from various sources.
@@ -209,7 +220,8 @@ class TokenManager:
 
             # Check token expiration for fine-grained tokens
             if token_type == "Fine-grained Personal Access Token" and self.config_manager:
-                    stored_expiry = self.config_manager.get(f"tokens.{self.token[:10]}.expires_at")
+                    token_key = self._get_token_key()
+                    stored_expiry = self.config_manager.get(f"tokens.{token_key}.expires_at")
                     if stored_expiry:
                         info["expires_at"] = stored_expiry
                         expires_dt = datetime.fromisoformat(stored_expiry)
@@ -374,12 +386,8 @@ class TokenManager:
             return False
 
         try:
-            # Store token metadata using SHA-256 hash of the token as key
-            # We use a hash to avoid storing the raw token, and truncate to 16 hex
-            # characters (64 bits) for storage efficiency. While this increases
-            # collision risk vs full hash, it's sufficient for typical use cases
-            # with small numbers of tokens.
-            token_key = hashlib.sha256(self.token.encode()).hexdigest()[:16]
+            # Store token metadata using consistent token key
+            token_key = self._get_token_key()
 
             metadata = {
                 "type": self.get_token_info().get("type", "Unknown"),

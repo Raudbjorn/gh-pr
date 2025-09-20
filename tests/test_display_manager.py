@@ -15,7 +15,6 @@ class TestDisplayManager:
     @pytest.fixture
     def display_manager(self):
         """Create a DisplayManager instance."""
-        from rich.console import Console
         console = Console()
         return DisplayManager(console=console, verbose=False)
 
