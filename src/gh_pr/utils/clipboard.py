@@ -1,5 +1,6 @@
 """Clipboard management with WSL2 support."""
 
+import shlex
 import shutil
 import subprocess
 from typing import Optional
@@ -62,17 +63,19 @@ class ClipboardManager:
             return False
 
         try:
-            # Command list is pre-validated and safe - no user input injection possible
-            # Using a list (not string) prevents shell injection attacks
+            # Security: clipboard_cmd is a list of hardcoded strings from _detect_clipboard_command()
+            # No user input is used in command construction, preventing command injection
+            # Using list format with shell=False provides defense in depth
             process = subprocess.Popen(
-                self.clipboard_cmd,  # This is safe - it's a list, not a string
+                self.clipboard_cmd,  # Safe: hardcoded command list
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                shell=False,  # Explicitly ensure no shell is used
             )
-            process.communicate(input=text.encode("utf-8"))
+            stdout, stderr = process.communicate(input=text.encode("utf-8"), timeout=5)
             return process.returncode == 0
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
             return False
 
     def is_available(self) -> bool:

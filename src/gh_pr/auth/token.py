@@ -100,8 +100,12 @@ class TokenManager:
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
 
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
+        except subprocess.TimeoutExpired:
+            logger.debug(f"Timeout expired while getting gh CLI token (timeout: {SUBPROCESS_TIMEOUT}s)")
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.debug(f"Failed to get gh CLI token: {e}")
+        except Exception as e:
+            logger.debug(f"Unexpected error getting gh CLI token: {e}")
 
         return None
 
@@ -244,7 +248,7 @@ class TokenManager:
                         # Try to list repos (contents access)
                         try:
                             user.get_repos(type="all")[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "pull_requests":
                         # Try to list pull requests for a repo
@@ -253,7 +257,7 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_pulls()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "issues":
                         # Try to list issues for a repo
@@ -262,7 +266,7 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_issues()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "discussions":
                         # Try to list discussions for a repo
@@ -271,13 +275,13 @@ class TokenManager:
                             if repos.totalCount > 0:
                                 repo = repos[0]
                                 repo.get_discussions()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
                     elif perm == "organization":
                         # Try to get organizations
                         try:
                             user.get_orgs()[0]
-                        except Exception:
+                        except (GithubException, IndexError, AttributeError):
                             return False
             return True
 

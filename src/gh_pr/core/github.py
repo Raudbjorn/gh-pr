@@ -6,19 +6,26 @@ from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+# Constants for API timeouts
+DEFAULT_TIMEOUT = 30  # seconds
+CONNECTION_TIMEOUT = 10  # seconds
+
 
 class GitHubClient:
     """Wrapper for GitHub API operations."""
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, timeout: int = DEFAULT_TIMEOUT):
         """
         Initialize GitHubClient.
 
         Args:
             token: GitHub authentication token
+            timeout: API request timeout in seconds
         """
-        self.github = Github(token)
+        self.token = token  # Store token for GraphQL client
+        self.github = Github(token, timeout=timeout)
         self._user = None
+        self.timeout = timeout
 
     @property
     def user(self):
@@ -93,25 +100,19 @@ class GitHubClient:
             List of PR dictionaries
         """
         repository = self.get_repository(owner, repo)
-        prs = []
 
-        for pr in repository.get_pulls(state="open"):
-            if len(prs) >= limit:
-                break
-            prs.append({
-                "number": pr.number,
-                "title": pr.title,
-                "author": pr.user.login,
-                "branch": pr.head.ref,
-                "head_ref": pr.head.ref,  # Add head_ref for consistency
-                "created_at": pr.created_at.isoformat() if pr.created_at else None,
-                "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
-                "draft": pr.draft,
-                "mergeable": pr.mergeable,
-                "labels": [label.name for label in pr.labels],
-            })
-
-        return prs
+        return [{
+            "number": pr.number,
+            "title": pr.title,
+            "author": pr.user.login,
+            "branch": pr.head.ref,
+            "head_ref": pr.head.ref,  # Add head_ref for consistency
+            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+            "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
+            "draft": pr.draft,
+            "mergeable": pr.mergeable,
+            "labels": [label.name for label in pr.labels],
+        } for pr in repository.get_pulls(state="open")[:limit]]
 
     def get_pr_reviews(
         self, owner: str, repo: str, pr_number: int
@@ -160,7 +161,7 @@ class GitHubClient:
                 "author": comment.user.login if comment.user else "Unknown",
                 "body": comment.body,
                 "path": comment.path,
-                "line": comment.line if comment.line else comment.original_line,
+                "line": comment.line or comment.original_line,
                 "start_line": comment.start_line if hasattr(comment, 'start_line') else None,
                 "commit_id": comment.commit_id,
                 "created_at": comment.created_at.isoformat() if comment.created_at else None,

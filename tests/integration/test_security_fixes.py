@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 
 from gh_pr.auth.token import TokenManager
-from gh_pr.core.cache import CacheManager
+from gh_pr.utils.cache import CacheManager
 from gh_pr.core.comments import CommentProcessor
-from gh_pr.core.config import ConfigManager
+from gh_pr.utils.config import ConfigManager
 from gh_pr.core.pr_manager import PRManager
 from gh_pr.utils.export import ExportManager
 
