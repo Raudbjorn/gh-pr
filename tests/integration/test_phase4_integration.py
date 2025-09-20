@@ -122,10 +122,9 @@ class TestFullWorkflowIntegration:
 
         # Verify batch results
         assert summary.total_prs == 3
-        assert summary.successful == 3  # All PRs processed (even if some resolutions failed)
-        assert summary.failed == 0
+        assert summary.successful == 2  # PRs 2 and 3 had no per-PR errors; PR 1 had a resolution error
+        assert summary.failed == 1
         assert summary.total_items_processed == 2  # 2 successfully resolved comments
-
         # Export the batch results
         batch_results = [
             {
