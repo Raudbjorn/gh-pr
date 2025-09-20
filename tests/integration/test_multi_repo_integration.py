@@ -377,10 +377,10 @@ class TestCompleteWorkflow(unittest.IsolatedAsyncioTestCase):
         results = await webhook_handler.handle(pr_event)
 
         self.assertTrue(workflow_executed)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['status'], 'handled')
-        self.assertTrue(results[0]['notified'])
-
+        self.assertIn('plugins', results)
+        self.assertEqual(len(results['plugins']), 1)
+        self.assertEqual(results['plugins'][0]['result']['status'], 'handled')
+        self.assertTrue(results['plugins'][0]['result']['notified'])
 
 if __name__ == '__main__':
     unittest.main()
