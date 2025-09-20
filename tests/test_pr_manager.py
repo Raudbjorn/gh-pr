@@ -224,22 +224,24 @@ class TestPRManager:
 
     def test_find_git_repos(self, pr_manager):
         """Test finding git repositories."""
-        with patch('gh_pr.core.pr_manager.Path') as mock_path:
-            # Mock current directory with .git
-            mock_git = Mock()
-            mock_git.exists.return_value = True
-            mock_path.return_value = mock_git
+        def make_mock_path(has_git, subdirs):
+            mock_path = Mock()
+            mock_path.exists.return_value = has_git
+            mock_path.iterdir.return_value = subdirs
+            return mock_path
 
-            # Mock subdirectories
-            mock_subdir1 = Mock()
-            mock_subdir1.is_dir.return_value = True
-            mock_subdir1.__truediv__.return_value.exists.return_value = True
+        # Mock subdirectories
+        mock_subdir1 = Mock()
+        mock_subdir1.is_dir.return_value = True
+        mock_subdir1.__truediv__.return_value.exists.return_value = True
 
-            mock_subdir2 = Mock()
-            mock_subdir2.is_dir.return_value = True
-            mock_subdir2.__truediv__.return_value.exists.return_value = False
+        mock_subdir2 = Mock()
+        mock_subdir2.is_dir.return_value = True
+        mock_subdir2.__truediv__.return_value.exists.return_value = False
 
-            mock_path.return_value.iterdir.return_value = [mock_subdir1, mock_subdir2]
+        with patch('gh_pr.core.pr_manager.Path') as mock_path_class:
+            mock_path_instance = make_mock_path(True, [mock_subdir1, mock_subdir2])
+            mock_path_class.return_value = mock_path_instance
 
             repos = pr_manager._find_git_repos()
             assert len(repos) >= 1  # At least current directory
