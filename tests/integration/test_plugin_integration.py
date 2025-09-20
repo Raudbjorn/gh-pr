@@ -53,7 +53,7 @@ class TestPluginIntegration(unittest.IsolatedAsyncioTestCase):
             plugin_code = f"""
 from gh_pr.plugins.base import PREventPlugin, PluginMetadata, PluginCapability
 
-class {name.title()}Plugin(PREventPlugin):
+class TestPREventPlugin(PREventPlugin):
     def get_metadata(self):
         return PluginMetadata(
             name="{name}",
@@ -75,7 +75,7 @@ class {name.title()}Plugin(PREventPlugin):
             plugin_code = f"""
 from gh_pr.plugins.base import NotificationPlugin, PluginMetadata, PluginCapability
 
-class {name.title()}Plugin(NotificationPlugin):
+class TestNotificationPlugin(NotificationPlugin):
     def get_metadata(self):
         return PluginMetadata(
             name="{name}",
@@ -98,7 +98,7 @@ class {name.title()}Plugin(NotificationPlugin):
             plugin_code = f"""
 from gh_pr.plugins.base import CommentFilterPlugin, PluginMetadata, PluginCapability
 
-class {name.title()}Plugin(CommentFilterPlugin):
+class TestCommentFilterPlugin(CommentFilterPlugin):
     def get_metadata(self):
         return PluginMetadata(
             name="{name}",
