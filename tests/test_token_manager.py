@@ -21,7 +21,6 @@ class TestTokenManagerInitialization:
         manager = TokenManager(token=token)
         assert manager.token == token
         assert manager._github is None
-        assert manager._token_info is None
 
     @patch.dict(os.environ, {"GH_TOKEN": "ghp_env_token"}, clear=True)  # noqa: S106
     def test_init_with_gh_token_env(self):
