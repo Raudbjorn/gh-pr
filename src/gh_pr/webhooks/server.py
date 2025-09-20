@@ -53,8 +53,7 @@ class WebhookConfig:
         if not self.secret:
             # Generate a secure random secret if none provided
             self.secret = secrets.token_urlsafe(32)
-            logger.warning(f"Generated webhook secret: {self.secret}")
-
+            logger.warning("Generated webhook secret (not shown for security)")
 
 class WebhookServer:
     """
