@@ -15,8 +15,10 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import tomllib
-
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
 from .base import Plugin, PluginContext
 
 logger = logging.getLogger(__name__)
