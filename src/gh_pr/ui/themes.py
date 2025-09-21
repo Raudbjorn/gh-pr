@@ -1,7 +1,7 @@
 """Theme system for gh-pr TUI with customizable color schemes."""
 
 from typing import Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from rich.theme import Theme
 from rich.style import Style
 
@@ -156,7 +156,6 @@ class ThemeManager:
         Returns:
             ColorScheme instance
         """
-        from dataclasses import replace
         base_theme = self.THEMES.get(theme_name, self.THEMES["default"])
         # Return a copy to avoid modifying the original
         return replace(base_theme)

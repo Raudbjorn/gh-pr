@@ -93,6 +93,30 @@ class TestThemeManager:
         # Other colors should remain default
         assert manager.color_scheme.error == "#DC3545"
 
+    def test_custom_color_invalid_types(self):
+        """Test that invalid attribute types in custom colors are handled properly."""
+        custom_colors = {
+            "primary": "#FF0000",  # Valid
+            "invalid_int": 123,  # Invalid: non-string value
+            "invalid_none": None,  # Invalid: None value
+            "invalid_list": ["#FF0000"],  # Invalid: list value
+            "nonexistent_attr": "#IGNORED"  # Should be ignored
+        }
+
+        # Should not raise exception but ignore invalid values
+        manager = ThemeManager(custom_colors=custom_colors)
+
+        # Valid override should be applied
+        assert manager.color_scheme.primary == "#FF0000"
+
+        # Other colors should remain default
+        assert manager.color_scheme.success == "#28A745"
+        assert manager.color_scheme.error == "#DC3545"
+
+        # Verify that the manager is still functional
+        theme = manager.get_rich_theme()
+        assert theme is not None
+
     def test_get_rich_theme(self):
         """Test Rich theme generation."""
         manager = ThemeManager()
@@ -116,6 +140,18 @@ class TestThemeManager:
         assert "$text" in css_vars
         assert css_vars["$primary"] == "#007ACC"
 
+    def _assert_theme_switch(self, manager, theme_name, expected_primary):
+        """Helper method to assert theme switching.
+
+        Args:
+            manager: ThemeManager instance
+            theme_name: Name of theme to switch to
+            expected_primary: Expected primary color after switch
+        """
+        manager.switch_theme(theme_name)
+        assert manager.current_theme_name == theme_name
+        assert manager.color_scheme.primary == expected_primary
+
     def test_switch_theme(self):
         """Test theme switching."""
         manager = ThemeManager()
@@ -124,14 +160,10 @@ class TestThemeManager:
         assert manager.color_scheme.primary == "#007ACC"
 
         # Switch to dark
-        manager.switch_theme("dark")
-        assert manager.current_theme_name == "dark"
-        assert manager.color_scheme.primary == "#0D6EFD"
+        self._assert_theme_switch(manager, "dark", "#0D6EFD")
 
         # Switch to monokai
-        manager.switch_theme("monokai")
-        assert manager.current_theme_name == "monokai"
-        assert manager.color_scheme.primary == "#66D9EF"
+        self._assert_theme_switch(manager, "monokai", "#66D9EF")
 
     def test_get_available_themes(self):
         """Test getting available theme list."""

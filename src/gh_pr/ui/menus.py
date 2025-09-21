@@ -109,13 +109,12 @@ class ActionMenu(Widget):
                 if item.shortcut:
                     label = f"{item.label} [{item.shortcut}]"
 
-                button = Button(
+                yield Button(
                     label,
                     id=f"action_{item.action.value}",
                     variant="default" if item.action != MenuAction.QUIT else "error",
                     disabled=not item.enabled,
                 )
-                yield button
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle action button press.
@@ -292,7 +291,7 @@ class SortOptionsMenu(Widget):
         yield Label("Sort By:")
         with RadioSet(id="sort_field"):
             for value, label in self.SORT_OPTIONS:
-                yield RadioButton(label, value=value)
+                yield RadioButton(label, id=f"sort_{value}", value=(value == self.current_sort))
 
         # Sort direction
         yield Label("Direction:")
@@ -308,7 +307,9 @@ class SortOptionsMenu(Widget):
             event: Radio set change event
         """
         if event.radio_set.id == "sort_field":
-            self.current_sort = str(event.value)
+            pressed = getattr(event, "pressed", None)
+            if pressed and pressed.id and pressed.id.startswith("sort_"):
+                self.current_sort = pressed.id.replace("sort_", "", 1)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle switch change.
@@ -382,7 +383,7 @@ class ExportMenu(Widget):
         yield Label("Export Format:")
         with RadioSet(id="export_format"):
             for value, label, icon in self.EXPORT_FORMATS:
-                yield RadioButton(f"{icon} {label}", value=value)
+                yield RadioButton(f"{icon} {label}", id=f"fmt_{value}", value=(value == self.export_format))
 
         # Export options
         yield Label("Include:")
@@ -401,7 +402,9 @@ class ExportMenu(Widget):
             event: Radio set change event
         """
         if event.radio_set.id == "export_format":
-            self.export_format = str(event.value)
+            pressed = getattr(event, "pressed", None)
+            if pressed and pressed.id and pressed.id.startswith("fmt_"):
+                self.export_format = pressed.id.replace("fmt_", "", 1)
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle switch change.

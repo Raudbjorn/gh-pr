@@ -18,7 +18,7 @@ class ConfigManager:
         "github": {
             "default_token": None,
             "check_token_expiry": True,
-            "pr_limit": 50,
+            "pr_limit": 50,  # Maximum number of PRs to fetch per repository
         },
         "display": {
             "default_filter": "unresolved",

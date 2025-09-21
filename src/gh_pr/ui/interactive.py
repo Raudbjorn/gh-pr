@@ -363,6 +363,10 @@ class GhPrTUI(App):
         self.filter_mode = "unresolved"
         self.show_filter_menu = False
 
+        # Task management for debouncing
+        self._search_task = None
+        self._search_debounce_handle = None
+
     def compose(self) -> ComposeResult:
         """Compose the TUI layout."""
         yield Header()
@@ -414,10 +418,21 @@ class GhPrTUI(App):
 
             # Update list
             pr_list = self.query_one("#pr-list", ListView)
+
+            # Preserve scroll position and selection
+            prev_index = pr_list.index if hasattr(pr_list, "index") else None
+            prev_scroll_offset = pr_list.scroll_offset if hasattr(pr_list, "scroll_offset") else None
+
             pr_list.clear()
 
             for pr in self.prs:
                 pr_list.append(PRListItem(pr))
+
+            # Restore selection and scroll position if possible
+            if prev_index is not None and len(pr_list.children) > prev_index:
+                pr_list.index = prev_index
+            if prev_scroll_offset is not None:
+                pr_list.scroll_offset = prev_scroll_offset
 
         except Exception as e:
             self.notify(f"Error loading PRs: {str(e)}", severity="error")
@@ -507,8 +522,28 @@ class GhPrTUI(App):
         """
         if isinstance(event.item, PRListItem):
             pr_data = event.item.pr_data
-            asyncio.create_task(
-                self.handle_search(f"{self.current_repo}#{pr_data['number']}")
+
+            # Cancel previous debounce handle if exists
+            if self._search_debounce_handle:
+                self._search_debounce_handle.cancel()
+
+            async def debounce_search():
+                # Cancel previous search task if running
+                if self._search_task and not self._search_task.done():
+                    self._search_task.cancel()
+                    try:
+                        await self._search_task
+                    except asyncio.CancelledError:
+                        pass
+
+                self._search_task = asyncio.create_task(
+                    self.handle_search(f"{self.current_repo}#{pr_data['number']}")
+                )
+
+            # Debounce: wait 150ms before starting search
+            loop = asyncio.get_event_loop()
+            self._search_debounce_handle = loop.call_later(
+                0.15, lambda: asyncio.create_task(debounce_search())
             )
 
     def action_quit(self) -> None:
