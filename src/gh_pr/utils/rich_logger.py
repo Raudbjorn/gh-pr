@@ -39,7 +39,6 @@ install_rich_traceback(show_locals=True)
 # Configuration constants
 DEFAULT_TIMEZONE = pytz.timezone('Atlantic/Reykjavik')
 DEFAULT_LOG_LEVEL = logging.INFO
-SUBPROCESS_TIMEOUT = 5  # seconds
 MAX_LOG_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 BACKUP_COUNT = 5
 
