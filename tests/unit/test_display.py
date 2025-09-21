@@ -26,23 +26,22 @@ class TestPRDisplay(unittest.TestCase):
         """Set up test fixtures."""
         self.display = PRDisplay()
 
-    def test_format_pr_summary(self):
-        """Test formatting PR summary."""
-        mock_pr = Mock()
-        mock_pr.number = 123
-        mock_pr.title = "Add new feature"
-        mock_pr.state = "open"
-        mock_pr.user.login = "alice"
-        mock_pr.created_at = datetime.now() - timedelta(days=2)
-        mock_pr.labels = [Mock(name="enhancement"), Mock(name="review")]
-
-        summary = self.display.format_pr_summary(mock_pr)
-
-        self.assertIn("#123", summary)
-        self.assertIn("Add new feature", summary)
-        self.assertIn("alice", summary)
-        self.assertIn("enhancement", summary)
-
+    def test_display_pr_header(self):
+        """Test PR header display."""
+        pr_data = {
+            "number": 123,
+            "title": "Add new feature",
+            "state": "open",
+            "author": "alice",
+            "changed_files": 2,
+            "additions": 10,
+            "deletions": 3,
+        }
+        self.display.display_pr_header(pr_data)
+        output = self.console.export_text()
+        self.assertIn("PR #123", output)
+        self.assertIn("Add new feature", output)
+        self.assertIn("alice", output)
     def test_format_pr_detailed(self):
         """Test formatting detailed PR view."""
         mock_pr = Mock()
