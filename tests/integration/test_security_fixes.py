@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch, MagicMock
 import pytest
 
 from gh_pr.auth.token import TokenManager
-from gh_pr.core.cache import CacheManager
+from gh_pr.utils.cache import CacheManager
 from gh_pr.core.comments import CommentProcessor
-from gh_pr.core.config import ConfigManager
+from gh_pr.utils.config import ConfigManager
 from gh_pr.core.pr_manager import PRManager
 from gh_pr.utils.export import ExportManager
 
@@ -28,11 +28,11 @@ class TestEndToEndSecurityIntegration:
             # Mock successful but slow gh CLI
             mock_result = Mock()
             mock_result.returncode = 0
-            mock_result.stdout = "Token: ghp_test_token_123456789"
+            mock_result.stdout = "Token: ghp_FAKE_TEST_TOKEN_REPLACED"
             mock_run.return_value = mock_result
 
             token_manager = TokenManager()
-            assert token_manager.get_token() == "ghp_test_token_123456789"
+            assert token_manager.get_token() == "ghp_FAKE_TEST_TOKEN_REPLACED"
 
             # Verify timeout was applied
             call_args = mock_run.call_args_list[0]

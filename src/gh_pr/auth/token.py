@@ -233,7 +233,9 @@ class TokenManager:
                             stored_expiry = legacy
                     if stored_expiry:
                         info["expires_at"] = stored_expiry
-                        expires_dt = datetime.fromisoformat(stored_expiry)
+                        # Handle Z suffix in ISO format (replace with +00:00 for fromisoformat compatibility)
+                        expiry_str = stored_expiry.replace('Z', '+00:00') if stored_expiry.endswith('Z') else stored_expiry
+                        expires_dt = datetime.fromisoformat(expiry_str)
                         now = datetime.now(timezone.utc)
                         days_remaining = (expires_dt - now).days
                         info["days_remaining"] = days_remaining

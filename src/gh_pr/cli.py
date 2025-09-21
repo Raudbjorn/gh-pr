@@ -599,7 +599,8 @@ def _handle_output(
         console.print(f"[green]✓ Generated review report: {report_file}[/green]")
 
     if copy:
-        clipboard = ClipboardManager()
+        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
+        clipboard = ClipboardManager(timeout=clipboard_timeout)
         plain_output = display_manager.generate_plain_output(pr_data, comments, summary)
         if clipboard.copy(plain_output):
             console.print("[green]✓ Copied to clipboard (plain text)[/green]")

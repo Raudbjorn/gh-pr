@@ -17,22 +17,22 @@ class TestTokenManagerInitialization:
 
     def test_init_with_provided_token(self):
         """Test initialization with explicitly provided token."""
-        token = "ghp_test_token_12345"  # noqa: S105
+        token = "ghp_FAKE_TOKEN_FOR_TESTING_ONLY"  # noqa: S105
         manager = TokenManager(token=token)
         assert manager.token == token
         assert manager._github is None
 
-    @patch.dict(os.environ, {"GH_TOKEN": "ghp_env_token"}, clear=True)
+    @patch.dict(os.environ, {"GH_TOKEN": "ghp_FAKE_ENV_TOKEN"}, clear=True)  # noqa: S106
     def test_init_with_gh_token_env(self):
         """Test token discovery from GH_TOKEN environment variable."""
         manager = TokenManager()
-        assert manager.token == "ghp_env_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_ENV_TOKEN"  # noqa: S105
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_github_env_token"}, clear=True)
+    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_FAKE_GITHUB_ENV_TOKEN"}, clear=True)  # noqa: S106
     def test_init_with_github_token_env(self):
         """Test token discovery from GITHUB_TOKEN environment variable."""
         manager = TokenManager()
-        assert manager.token == "ghp_github_env_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_GITHUB_ENV_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("subprocess.run")
@@ -40,21 +40,21 @@ class TestTokenManagerInitialization:
         """Test token discovery from gh CLI."""
         # Mock gh CLI response
         mock_result = Mock()
-        mock_result.stdout = "Token: ghp_cli_token_12345"
+        mock_result.stdout = "Token: ghp_FAKE_CLI_TOKEN"  # noqa: S105
         mock_result.returncode = 0
         mock_run.return_value = mock_result
 
         manager = TokenManager()
-        assert manager.token == "ghp_cli_token_12345"  # noqa: S105
+        assert manager.token == "ghp_FAKE_CLI_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     def test_init_with_config_token(self):
         """Test token discovery from configuration file."""
         config = ConfigManager()
-        config.set("github.token", "ghp_config_token")
+        config.set("github.token", "ghp_FAKE_CONFIG_TOKEN")  # noqa: S105
 
         manager = TokenManager(config_manager=config)
-        assert manager.token == "ghp_config_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_CONFIG_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("subprocess.run")
@@ -146,7 +146,7 @@ class TestTokenInfo:
         mock_github.get_rate_limit.return_value = mock_rate_limit
         mock_github_class.return_value = mock_github
 
-        manager = TokenManager(token="ghp_classic_token_12345")  # noqa: S106
+        manager = TokenManager(token="ghp_FAKE_TEST_TOKEN_REPLACED")  # noqa: S106
         info = manager.get_token_info()
 
         assert info is not None
@@ -246,7 +246,10 @@ class TestTokenExpiration:
         # Setup config with expiration metadata
         config = ConfigManager()
         future_date = datetime.now(timezone.utc) + timedelta(days=30)
-        config.set("tokens.github_pat.expires_at", future_date.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", future_date.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -269,7 +272,10 @@ class TestTokenExpiration:
 
         config = ConfigManager()
         near_future = datetime.now(timezone.utc) + timedelta(days=5)
-        config.set("tokens.github_pat.expires_at", near_future.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", near_future.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -292,7 +298,10 @@ class TestTokenExpiration:
 
         config = ConfigManager()
         past_date = datetime.now(timezone.utc) - timedelta(days=1)
-        config.set("tokens.github_pat.expires_at", past_date.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", past_date.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -353,8 +362,8 @@ class TestPermissions:
             assert manager.has_permissions(["repo", "write:discussion"]) is True
             assert manager.has_permissions(["admin:org"]) is False
     @patch("gh_pr.auth.token.Github")
-    def test_has_permissions_fine_grained_token(self, mock_github_class):
-        """Test permission checking for fine-grained token."""
+    def test_has_permissions_fine_grained_token_success(self, mock_github_class):
+        """Test permission checking for fine-grained token succeeds."""
         mock_github = Mock()
         mock_user = Mock()
         mock_repos = Mock()
@@ -382,9 +391,32 @@ class TestPermissions:
 
         manager = TokenManager(token="github_pat_fine_grained")  # noqa: S106
 
-        # Should attempt to check permissions by making API calls
+        # Should successfully check permissions
         result = manager.has_permissions(["repo"])
-        assert isinstance(result, bool)
+        assert result is True
+
+    @patch("gh_pr.auth.token.Github")
+    def test_has_permissions_fine_grained_token_failure(self, mock_github_class):
+        """Test permission checking for fine-grained token fails."""
+        mock_github = Mock()
+
+        # Setup mock to raise GithubException for permission denied
+        mock_github.get_user.side_effect = GithubException(403, "Insufficient permissions")
+
+        # Mock rate limit to avoid TypeError
+        mock_rate_limit = Mock()
+        mock_rate_limit.core.limit = 5000
+        mock_rate_limit.core.remaining = 4999
+        mock_rate_limit.core.reset = datetime.now(timezone.utc)
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+
+        mock_github_class.return_value = mock_github
+
+        manager = TokenManager(token="github_pat_fine_grained")  # noqa: S106
+
+        # Should fail permission check when API calls are denied
+        result = manager.has_permissions(["repo"])
+        assert result is False
 
 
 class TestTokenMetadata:
@@ -461,6 +493,6 @@ class TestGitHubClient:
 
     def test_get_token(self):
         """Test getting the current token."""
-        token = "ghp_test_token_12345"  # noqa: S105
+        token = "ghp_FAKE_TEST_TOKEN_REPLACED"  # noqa: S105
         manager = TokenManager(token=token)
         assert manager.get_token() == token
