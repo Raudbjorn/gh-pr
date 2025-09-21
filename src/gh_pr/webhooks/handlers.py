@@ -312,12 +312,11 @@ class WebhookHandler:
         }
 
         event_type = event_type_map.get(github_event, EventType.OTHER)
-        action = payload.get('action', '')
         delivery_id = headers.get('X-GitHub-Delivery', '')
 
         return WebhookEvent(
             type=event_type,
-            action=action,
             payload=payload,
-            delivery_id=delivery_id
+            delivery_id=delivery_id,
+            headers=headers
         )

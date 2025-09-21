@@ -251,25 +251,12 @@ class NotificationManager:
             return False
 
         try:
-            # Security: Commands are from hardcoded NOTIFY_COMMANDS dictionary
-            # Title and message are user input but used with shell=False (default)
-            # This prevents shell injection as arguments are passed directly to the process
-            commands = NOTIFY_COMMANDS['linux'][self._notifier]
-            cmd = []
-
-            # Replace placeholders with user input
-            # Safe because we use subprocess with shell=False (default)
-            for part in commands:
-                if '{title}' in part:
-                    cmd.append(part.format(title=title))
-                elif '{message}' in part:
-                    cmd.append(part.format(message=message))
-                else:
-                    cmd.append(part)
-
-            # Add urgency for notify-send
+            # Build command for notify-send with proper arguments
             if self._notifier == 'notify-send':
-                cmd[2] = f'--urgency={urgency}'
+                cmd = ['notify-send']
+
+                # Add urgency
+                cmd.append(f'--urgency={urgency}')
 
                 # Add timeout
                 cmd.extend(['-t', str(self.config.timeout * 1000)])
@@ -277,6 +264,23 @@ class NotificationManager:
                 # Add icon if available
                 if self.config.icon_path and self.config.icon_path.exists():
                     cmd.extend(['-i', str(self.config.icon_path)])
+
+                # Add title and message (must be last)
+                cmd.extend([title, message])
+            else:
+                # For other notifiers, use the template system
+                commands = NOTIFY_COMMANDS['linux'][self._notifier]
+                cmd = []
+
+                # Replace placeholders with user input
+                # Safe because we use subprocess with shell=False (default)
+                for part in commands:
+                    if '{title}' in part:
+                        cmd.append(part.format(title=title))
+                    elif '{message}' in part:
+                        cmd.append(part.format(message=message))
+                    else:
+                        cmd.append(part)
 
             # Security: Using subprocess.run with shell=False (default) prevents injection
             result = subprocess.run(
@@ -328,11 +332,13 @@ class NotificationManager:
             # Try Windows balloon tip as fallback
             try:
                 import ctypes
-                from ctypes import wintypes
 
-                # This is a simplified version
-                MessageBox = ctypes.windll.user32.MessageBoxW
-                MessageBox(None, message, title, 0x40 | 0x1)
+                # Run MessageBox in a thread to avoid blocking the event loop
+                def show_messagebox():
+                    MessageBox = ctypes.windll.user32.MessageBoxW
+                    MessageBox(None, message, title, 0x40 | 0x1)
+
+                await asyncio.to_thread(show_messagebox)
                 return True
 
             except Exception as e:

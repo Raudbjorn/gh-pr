@@ -70,7 +70,8 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
     try:
         # Security: cmd list is built from static strings and constrained argparse choices
         # No user input is passed directly to the shell (list form prevents injection)
-        result = subprocess.run(cmd, check=False)
+        # Using list form (not string) with shell=False (default) prevents command injection
+        result = subprocess.run(cmd, check=False)  # noqa: S603
         return result.returncode
     except KeyboardInterrupt:
         print("\nTests interrupted by user")

@@ -514,7 +514,10 @@ class MultiRepoManager:
 
         try:
             source_client = self._get_repo_client(source_config)
-            source_labels = list(source_client.get_labels())
+            # Run blocking label fetch off the event loop
+            source_labels = await asyncio.to_thread(
+                lambda: list(source_client.get_labels())
+            )
 
             # Determine target repos
             if not target_repos:
@@ -535,16 +538,17 @@ class MultiRepoManager:
 
                     for label in source_labels:
                         try:
-                            # Try to create label
-                            target_client.create_label(
+                            # Try to create label - run blocking call off the event loop
+                            await asyncio.to_thread(
+                                target_client.create_label,
                                 name=label.name,
                                 color=label.color,
                                 description=label.description or ""
                             )
                             created_labels.append(label.name)
-                        except Exception:
-                            # Label might already exist
-                            pass
+                        except Exception as e:
+                            # Label might already exist - log but continue
+                            logger.debug(f"Label {label.name} already exists or error: {e}")
 
                     results[target_repo_name] = created_labels
 

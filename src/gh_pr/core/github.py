@@ -1,6 +1,7 @@
 """GitHub API client wrapper."""
 
 from typing import Any, Optional
+import logging
 
 from github import Github, GithubException
 from github.PullRequest import PullRequest
@@ -9,6 +10,8 @@ from github.Repository import Repository
 # Constants for API timeouts
 DEFAULT_TIMEOUT = 30  # seconds
 CONNECTION_TIMEOUT = 10  # seconds
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubClient:
@@ -346,11 +349,15 @@ class GitHubClient:
         # Would need to use requests library directly
         return False
 
-    def get_current_user_login(self) -> str:
+    def get_current_user_login(self) -> Optional[str]:
         """
         Get the login of the current authenticated user.
 
         Returns:
-            User login string
+            User login string or None if error
         """
-        return self.user.login
+        try:
+            return self.user.login
+        except GithubException as e:
+            logger.error(f"Failed to get current user login: {e}")
+            return None

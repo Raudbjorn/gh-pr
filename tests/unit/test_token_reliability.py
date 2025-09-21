@@ -418,13 +418,19 @@ class TestTokenManagerReliability:
 class TestTokenManagerEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_empty_token_string(self):
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('gh_pr.auth.token.TokenManager._get_gh_cli_token')
+    def test_empty_token_string(self, mock_gh_cli):
         """Test handling of empty token string."""
+        mock_gh_cli.return_value = None  # Ensure no fallback
         with pytest.raises(ValueError):
             TokenManager(token="")
 
-    def test_whitespace_only_token(self):
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('gh_pr.auth.token.TokenManager._get_gh_cli_token')
+    def test_whitespace_only_token(self, mock_gh_cli):
         """Test handling of whitespace-only token."""
+        mock_gh_cli.return_value = None  # Ensure no fallback
         with pytest.raises(ValueError):
             TokenManager(token="   ")
 

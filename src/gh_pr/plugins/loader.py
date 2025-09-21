@@ -8,6 +8,7 @@ with dependency validation.
 import importlib
 import importlib.util
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -43,8 +44,11 @@ def sanitize_module_name(name: str) -> str:
 DEFAULT_PLUGIN_PATHS = [
     Path.home() / '.config' / 'gh-pr' / 'plugins',
     Path.home() / '.gh-pr' / 'plugins',
-    Path.cwd() / '.gh-pr' / 'plugins',
 ]
+
+# Only include CWD if explicitly enabled via environment variable (security measure)
+if os.getenv('GH_PR_ALLOW_CWD_PLUGINS', '').lower() == 'true':
+    DEFAULT_PLUGIN_PATHS.append(Path.cwd() / '.gh-pr' / 'plugins')
 
 
 class PluginLoader:
@@ -196,8 +200,13 @@ class PluginLoader:
         if '.' in name:
             parent_name = name.rsplit('.', 1)[0]
             if parent_name not in sys.modules:
-                # Create parent package placeholder
-                parent_module = type(sys)('module')
+                # Create proper namespace package with correct name and spec
+                parent_spec = importlib.util.spec_from_file_location(
+                    parent_name,
+                    None,
+                    submodule_search_locations=[str(path.parent)]
+                )
+                parent_module = importlib.util.module_from_spec(parent_spec)
                 parent_module.__path__ = [str(path.parent)]
                 sys.modules[parent_name] = parent_module
 
