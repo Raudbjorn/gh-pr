@@ -25,14 +25,15 @@ class PermissionChecker:
         "dismiss_review": ["repo"],
     }
 
-    def __init__(self, github_client: Github):
+    def __init__(self, token_manager):
         """
         Initialize PermissionChecker.
 
         Args:
-            github_client: Authenticated GitHub client
+            token_manager: TokenManager instance with GitHub token
         """
-        self.github = github_client
+        from github import Github
+        self.github = Github(token_manager.get_token())
 
     def can_perform_operation(
         self, operation: str, owner: str, repo: str
@@ -216,3 +217,23 @@ class PermissionChecker:
             for operation in operations
             if operation in self.OPERATION_PERMISSIONS
         }
+
+    def has_pr_permissions(
+        self, owner: str, repo: str, operations: list[str]
+    ) -> bool:
+        """
+        Check if user has permissions for PR operations.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            operations: List of operations to check
+
+        Returns:
+            True if user has permissions for all operations
+        """
+        for operation in operations:
+            result = self.can_perform_operation(operation, owner, repo)
+            if not result["allowed"]:
+                return False
+        return True

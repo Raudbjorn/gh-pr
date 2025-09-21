@@ -152,3 +152,113 @@ class ExportManager:
         }
 
         return json.dumps(export_data, indent=2, default=str)
+
+    def export_review_report(
+        self, pr_data: dict[str, Any], summary: dict[str, Any]
+    ) -> str:
+        """
+        Export a review report for the PR.
+
+        Args:
+            pr_data: PR data dictionary
+            summary: PR summary data
+
+        Returns:
+            Path to exported report file
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"pr_{pr_data['number']}_review_report_{timestamp}.md"
+
+        lines = []
+        lines.append(f"# Pull Request Review Report")
+        lines.append("")
+        lines.append(f"## PR #{pr_data['number']}: {pr_data['title']}")
+        lines.append("")
+        lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("")
+
+        # PR Details
+        lines.append("### PR Details")
+        lines.append(f"- **Author:** @{pr_data['author']}")
+        lines.append(f"- **Status:** {pr_data['state']}")
+        lines.append(f"- **Base Branch:** {pr_data['base']['ref']}")
+        lines.append(f"- **Head Branch:** {pr_data['head']['ref']}")
+        lines.append(f"- **Changed Files:** {pr_data.get('changed_files', 0)}")
+        lines.append(f"- **Additions:** +{pr_data.get('additions', 0)}")
+        lines.append(f"- **Deletions:** -{pr_data.get('deletions', 0)}")
+        lines.append("")
+
+        # Review Status
+        lines.append("### Review Status")
+        lines.append(f"- **Approvals:** {summary.get('approvals', 0)}")
+        lines.append(f"- **Changes Requested:** {summary.get('changes_requested', 0)}")
+        lines.append(f"- **Comments:** {summary.get('comments', 0)}")
+        lines.append("")
+
+        # Thread Summary
+        lines.append("### Comment Threads")
+        lines.append(f"- **Total Threads:** {summary.get('total_threads', 0)}")
+        lines.append(f"- **Unresolved (Active):** {summary.get('unresolved_active', 0)}")
+        lines.append(f"- **Unresolved (Outdated):** {summary.get('unresolved_outdated', 0)}")
+        lines.append(f"- **Resolved (Active):** {summary.get('resolved_active', 0)}")
+        lines.append(f"- **Resolved (Outdated):** {summary.get('resolved_outdated', 0)}")
+        lines.append("")
+
+        # Recommendations
+        lines.append("### Recommendations")
+        if summary.get('unresolved_active', 0) > 0:
+            lines.append("- ⚠️ Address unresolved active comments before merging")
+        if summary.get('unresolved_outdated', 0) > 0:
+            lines.append("- 🕒 Consider resolving outdated comments to clean up the PR")
+        if summary.get('changes_requested', 0) > 0:
+            lines.append("- 🔴 Address requested changes before merging")
+        if summary.get('approvals', 0) == 0:
+            lines.append("- ⚡ Obtain at least one approval before merging")
+        lines.append("")
+
+        output_path = Path(filename)
+        output_path.write_text("\n".join(lines))
+        return str(output_path)
+
+    def export_batch_results(
+        self, results: list[dict[str, Any]], operation: str
+    ) -> str:
+        """
+        Export batch operation results.
+
+        Args:
+            results: List of batch operation results
+            operation: Name of the batch operation
+
+        Returns:
+            Path to exported results file
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"batch_{operation}_{timestamp}.csv"
+
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header
+        writer.writerow([
+            "PR Identifier",
+            "Success",
+            "Message",
+            "Details",
+            "Error"
+        ])
+
+        # Data
+        for result in results:
+            writer.writerow([
+                result.get("pr_identifier", ""),
+                "Yes" if result.get("success") else "No",
+                result.get("message", ""),
+                json.dumps(result.get("details", {})) if result.get("details") else "",
+                result.get("error", "")
+            ])
+
+        output_path = Path(filename)
+        output_path.write_text(output.getvalue())
+        return str(output_path)

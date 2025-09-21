@@ -8,6 +8,39 @@ from typing import Any, Optional
 class CommentProcessor:
     """Process and organize PR comments."""
 
+    def process(self, pr, comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Process PR and comments into organized threads.
+
+        Args:
+            pr: PR object (unused for now, kept for compatibility)
+            comments: List of comment dictionaries
+
+        Returns:
+            List of organized comment threads
+        """
+        return self.organize_into_threads(comments)
+
+    def parse_comment(self, comment: dict[str, Any]) -> dict[str, Any]:
+        """
+        Parse a single comment into standard format.
+
+        Args:
+            comment: Raw comment dictionary
+
+        Returns:
+            Parsed comment dictionary
+        """
+        return {
+            "id": comment.get("id"),
+            "author": comment.get("author"),
+            "body": comment.get("body"),
+            "path": comment.get("path"),
+            "line": comment.get("line"),
+            "created_at": comment.get("created_at"),
+            "is_outdated": self._is_comment_outdated(comment),
+        }
+
     def organize_into_threads(
         self, comments: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
