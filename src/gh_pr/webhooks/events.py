@@ -22,7 +22,6 @@ class EventType(Enum):
 
     # Issue events
     ISSUES = "issues"
-    ISSUE = "issues"  # Alias for compatibility
     ISSUE_COMMENT = "issue_comment"
 
     # Repository events
@@ -41,7 +40,6 @@ class EventType(Enum):
     STATUS = "status"
     PING = "ping"
     META = "meta"
-    OTHER = "other"  # For unknown/unhandled event types
 
 
 @dataclass

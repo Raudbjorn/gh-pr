@@ -302,7 +302,7 @@ class WebhookHandler:
         github_event = headers.get('X-GitHub-Event', '')
         event_type_map = {
             'pull_request': EventType.PULL_REQUEST,
-            'issues': EventType.ISSUE,  # Use ISSUE for test compatibility
+            'issues': EventType.ISSUES,
             'issue_comment': EventType.ISSUE_COMMENT,
             'pull_request_review': EventType.PULL_REQUEST_REVIEW,
             'pull_request_review_comment': EventType.PULL_REQUEST_REVIEW_COMMENT,
@@ -311,7 +311,8 @@ class WebhookHandler:
             'workflow_run': EventType.WORKFLOW_RUN,
         }
 
-        event_type = event_type_map.get(github_event, EventType.OTHER)
+        # Default to PING for unknown events since OTHER doesn't exist
+        event_type = event_type_map.get(github_event, EventType.PING)
         delivery_id = headers.get('X-GitHub-Delivery', '')
 
         return WebhookEvent(

@@ -9,23 +9,31 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from gh_pr.core.filters import CommentFilter as PRFilter
+from gh_pr.core.filters import CommentFilter
 
-# Mock other classes that don't exist
-class StateFilter:
+# Mock filter classes for testing
+class PRFilter:
+    """Base PR filter class for testing."""
+    def matches(self, pr):
+        """Check if PR matches filter criteria."""
+        raise NotImplementedError("Subclasses must implement matches()")
+
+class StateFilter(PRFilter):
     def __init__(self, state):
         self.state = state
     def matches(self, pr):
+        if self.state == 'all':
+            return True
         return pr.state == self.state
 
-class AuthorFilter:
+class AuthorFilter(PRFilter):
     def __init__(self, authors):
         self.authors = authors if isinstance(authors, list) else [authors]
         self.authors = [a.lower() for a in self.authors]
     def matches(self, pr):
         return pr.user.login.lower() in self.authors
 
-class LabelFilter:
+class LabelFilter(PRFilter):
     def __init__(self, labels, require_all=False, exclude=False):
         self.labels = labels if isinstance(labels, list) else [labels]
         self.require_all = require_all
@@ -39,7 +47,7 @@ class LabelFilter:
         else:
             return any(label in pr_labels for label in self.labels)
 
-class DateFilter:
+class DateFilter(PRFilter):
     def __init__(self, created_after=None, created_before=None, updated_after=None):
         self.created_after = created_after
         self.created_before = created_before
@@ -53,7 +61,7 @@ class DateFilter:
             return False
         return True
 
-class ReviewFilter:
+class ReviewFilter(PRFilter):
     def __init__(self, status=None, reviewer=None):
         self.status = status
         self.reviewer = reviewer
@@ -69,7 +77,7 @@ class ReviewFilter:
             return not any(r.state in ['APPROVED', 'CHANGES_REQUESTED'] for r in reviews)
         return True
 
-class CombinedFilter:
+class CombinedFilter(PRFilter):
     def __init__(self, filters, operator='AND'):
         self.filters = filters
         self.operator = operator

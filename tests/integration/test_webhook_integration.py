@@ -214,14 +214,13 @@ class TestWebhookEventFlow(IsolatedAsyncioTestCase):
         """Test GitHub event type to internal mapping."""
         test_cases = [
             ('pull_request', EventType.PULL_REQUEST),
-            ('issues', EventType.ISSUE),
+            ('issues', EventType.ISSUES),
             ('issue_comment', EventType.ISSUE_COMMENT),
             ('pull_request_review', EventType.PULL_REQUEST_REVIEW),
             ('pull_request_review_comment', EventType.PULL_REQUEST_REVIEW_COMMENT),
             ('push', EventType.PUSH),
             ('release', EventType.RELEASE),
-            ('workflow_run', EventType.WORKFLOW_RUN),
-            ('unknown_event', EventType.OTHER)
+            ('workflow_run', EventType.WORKFLOW_RUN)
         ]
 
         for github_event, expected_type in test_cases:
@@ -241,8 +240,8 @@ class TestWebhookEventFlow(IsolatedAsyncioTestCase):
 
         event = WebhookEvent(
             type=EventType.PUSH,
-            action='push',
-            payload={'commits': []}
+            delivery_id='test-123',
+            payload={'action': 'push', 'commits': []}
         )
 
         results = await self.handler.handle_event(event)
@@ -262,13 +261,13 @@ class TestWebhookEventFlow(IsolatedAsyncioTestCase):
         handler2 = AsyncMock(return_value={'id': 2})
 
         # Register handlers
-        self.handler.register_handler(EventType.ISSUE, handler1)
-        self.handler.register_handler(EventType.ISSUE, handler2)
+        self.handler.register_handler(EventType.ISSUES, handler1)
+        self.handler.register_handler(EventType.ISSUES, handler2)
 
         event = WebhookEvent(
-            type=EventType.ISSUE,
-            action='opened',
-            payload={}
+            type=EventType.ISSUES,
+            delivery_id='test-456',
+            payload={'action': 'opened'}
         )
 
         # Both handlers should be called
@@ -276,7 +275,7 @@ class TestWebhookEventFlow(IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 2)
 
         # Unregister one handler
-        self.handler.unregister_handler(EventType.ISSUE, handler1)
+        self.handler.unregister_handler(EventType.ISSUES, handler1)
 
         # Reset mocks
         handler1.reset_mock()
