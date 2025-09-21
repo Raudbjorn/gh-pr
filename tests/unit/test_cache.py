@@ -224,6 +224,8 @@ class TestCacheManager(unittest.TestCase):
     def test_delete_success(self):
         """Test successful cache delete operation."""
         mock_cache = Mock()
+        # Configure mock to support item deletion
+        mock_cache.__delitem__ = Mock()
 
         manager = CacheManager(enabled=True)
         manager.cache = mock_cache
@@ -236,7 +238,7 @@ class TestCacheManager(unittest.TestCase):
     def test_delete_key_not_found(self):
         """Test delete method when key doesn't exist."""
         mock_cache = Mock()
-        mock_cache.__delitem__.side_effect = KeyError("Key not found")
+        mock_cache.__delitem__ = Mock(side_effect=KeyError("Key not found"))
 
         manager = CacheManager(enabled=True)
         manager.cache = mock_cache
@@ -251,7 +253,7 @@ class TestCacheManager(unittest.TestCase):
     def test_delete_exception_handling(self):
         """Test delete method handling other exceptions."""
         mock_cache = Mock()
-        mock_cache.__delitem__.side_effect = OSError("Cache error")
+        mock_cache.__delitem__ = Mock(side_effect=OSError("Cache error"))
 
         manager = CacheManager(enabled=True)
         manager.cache = mock_cache

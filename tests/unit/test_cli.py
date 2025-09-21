@@ -230,8 +230,11 @@ class TestCLICommand(unittest.TestCase):
              patch('gh_pr.cli.GitHubClient'), \
              patch('gh_pr.cli.PRManager') as mock_pr_manager, \
              patch('gh_pr.cli.CacheManager'), \
-             patch('gh_pr.cli.DisplayManager'):
+             patch('gh_pr.cli.DisplayManager'), \
+             patch('gh_pr.cli.ConfigManager'):
 
+            # Mock successful initialization
+            mock_token_manager.return_value.validate_token.return_value = True
             mock_token_manager.return_value.get_token.return_value = "test_token"
             mock_pr_manager.return_value.parse_pr_identifier.return_value = ("owner", "repo", 123)
             mock_pr_manager.return_value.fetch_pr_data.return_value = {"number": 123}
@@ -240,8 +243,8 @@ class TestCLICommand(unittest.TestCase):
 
             result = self.runner.invoke(main, ['--repo', 'owner/repo', '123'])
 
-            # Should pass repo to parse_pr_identifier
-            mock_pr_manager.return_value.parse_pr_identifier.assert_called_with('123', default_repo='owner/repo')
+            # Should pass repo to parse_pr_identifier as positional argument
+            mock_pr_manager.return_value.parse_pr_identifier.assert_called_with('123', 'owner/repo')
 
     def test_cli_verbose_option(self):
         """Test CLI with verbose option."""
@@ -272,9 +275,13 @@ class TestCLICommand(unittest.TestCase):
              patch('gh_pr.cli.GitHubClient'), \
              patch('gh_pr.cli.PRManager') as mock_pr_manager, \
              patch('gh_pr.cli.CacheManager') as mock_cache_manager, \
-             patch('gh_pr.cli.DisplayManager'):
+             patch('gh_pr.cli.DisplayManager'), \
+             patch('gh_pr.cli.ConfigManager') as mock_config_manager:
 
+            # Mock successful initialization
+            mock_token_manager.return_value.validate_token.return_value = True
             mock_token_manager.return_value.get_token.return_value = "test_token"
+            mock_config_manager.return_value.get.return_value = "~/.cache/gh-pr"
             mock_pr_manager.return_value.parse_pr_identifier.return_value = ("owner", "repo", 123)
             mock_pr_manager.return_value.fetch_pr_data.return_value = {"number": 123}
             mock_pr_manager.return_value.fetch_pr_comments.return_value = []
@@ -282,8 +289,8 @@ class TestCLICommand(unittest.TestCase):
 
             result = self.runner.invoke(main, ['--no-cache', '123'])
 
-            # CacheManager should be initialized with enabled=False
-            mock_cache_manager.assert_called_with(enabled=False)
+            # CacheManager should be initialized with enabled=False and location
+            mock_cache_manager.assert_called_with(enabled=False, location="~/.cache/gh-pr")
 
     def test_cli_clear_cache_option(self):
         """Test CLI with clear-cache option."""
@@ -343,19 +350,24 @@ class TestCLICommand(unittest.TestCase):
              patch('gh_pr.cli.PRManager') as mock_pr_manager, \
              patch('gh_pr.cli.CacheManager'), \
              patch('gh_pr.cli.DisplayManager'), \
-             patch('gh_pr.cli.ExportManager') as mock_export_manager:
+             patch('gh_pr.cli._handle_output') as mock_handle_output, \
+             patch('gh_pr.cli.ConfigManager'):
 
+            # Mock successful initialization
+            mock_token_manager.return_value.validate_token.return_value = True
             mock_token_manager.return_value.get_token.return_value = "test_token"
             mock_pr_manager.return_value.parse_pr_identifier.return_value = ("owner", "repo", 123)
             mock_pr_manager.return_value.fetch_pr_data.return_value = {"number": 123}
             mock_pr_manager.return_value.fetch_pr_comments.return_value = []
             mock_pr_manager.return_value.get_pr_summary.return_value = {"total_threads": 0}
-            mock_export_manager.return_value.export.return_value = "exported_file.md"
 
             result = self.runner.invoke(main, ['--export', 'markdown', '123'])
 
-            # Should call export manager
-            mock_export_manager.return_value.export.assert_called()
+            # Should call _handle_output with export parameter
+            mock_handle_output.assert_called()
+            # Check that export parameter was passed
+            args, kwargs = mock_handle_output.call_args
+            self.assertEqual(args[4], 'markdown')  # export is the 5th argument
 
     def test_cli_copy_option(self):
         """Test CLI with copy option."""
@@ -402,19 +414,38 @@ class TestCLICommand(unittest.TestCase):
 
     def test_cli_config_option(self):
         """Test CLI with config option."""
+        import tempfile
+        import os
         from gh_pr.cli import main
 
-        with patch('gh_pr.cli.ConfigManager') as mock_config_manager, \
-             patch('gh_pr.cli.TokenManager'), \
-             patch('gh_pr.cli.GitHubClient'), \
-             patch('gh_pr.cli.PRManager'), \
-             patch('gh_pr.cli.CacheManager'), \
-             patch('gh_pr.cli.DisplayManager'):
+        # Create a temporary config file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+            f.write('[cache]\nlocation = "~/.cache/gh-pr"\n')
+            temp_config = f.name
 
-            result = self.runner.invoke(main, ['--config', 'custom_config.toml', '123'])
+        try:
+            with patch('gh_pr.cli.ConfigManager') as mock_config_manager, \
+                 patch('gh_pr.cli.TokenManager') as mock_token_manager, \
+                 patch('gh_pr.cli.GitHubClient'), \
+                 patch('gh_pr.cli.PRManager') as mock_pr_manager, \
+                 patch('gh_pr.cli.CacheManager'), \
+                 patch('gh_pr.cli.DisplayManager'):
 
-            # Should pass config path to ConfigManager
-            mock_config_manager.assert_called_with(config_path='custom_config.toml')
+                # Mock successful initialization
+                mock_token_manager.return_value.validate_token.return_value = True
+                mock_token_manager.return_value.get_token.return_value = "test_token"
+                mock_pr_manager.return_value.parse_pr_identifier.return_value = ("owner", "repo", 123)
+                mock_pr_manager.return_value.fetch_pr_data.return_value = {"number": 123}
+                mock_pr_manager.return_value.fetch_pr_comments.return_value = []
+                mock_pr_manager.return_value.get_pr_summary.return_value = {"total_threads": 0}
+
+                result = self.runner.invoke(main, ['--config', temp_config, '123'])
+
+                # Should pass config path to ConfigManager
+                mock_config_manager.assert_called_with(config_path=temp_config)
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_config)
 
     def test_cli_error_handling_no_pr_identifier(self):
         """Test CLI error handling when no PR identifier is provided."""
@@ -471,10 +502,15 @@ class TestCLICommand(unittest.TestCase):
 
     def test_cli_console_import(self):
         """Test that console is properly imported and available."""
-        from gh_pr.cli import console
-        from rich.console import Console
-
-        self.assertIsInstance(console, Console)
+        # Stop the global console patch temporarily to test the real import
+        self.patcher_console.stop()
+        try:
+            from gh_pr.cli import console
+            from rich.console import Console
+            self.assertIsInstance(console, Console)
+        finally:
+            # Restart the patch
+            self.patcher_console.start()
 
 
 if __name__ == '__main__':
