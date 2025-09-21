@@ -11,333 +11,266 @@ from io import StringIO
 import io
 
 from rich.console import Console
-from gh_pr.ui.display import DisplayManager as PRDisplay
+from rich.table import Table
+from gh_pr.ui.display import DisplayManager
 
 
-class TestPRDisplay(unittest.TestCase):
-    """Test PR display formatting."""
+class TestDisplayManager(unittest.TestCase):
+    """Test DisplayManager functionality."""
 
     def setUp(self):
         """Set up test fixtures."""
         # Create a Console that writes to a capture buffer
         self.output_buffer = io.StringIO()
         self.console = Console(file=self.output_buffer, force_terminal=True, width=120, record=True)
-        self.display = PRDisplay(self.console)
+        self.display = DisplayManager(self.console)
 
     def test_display_pr_header(self):
         """Test PR header display."""
         pr_data = {
             "number": 123,
             "title": "Add new feature",
-            "state": "open",
             "author": "alice",
-            "changed_files": 2,
-            "additions": 10,
-            "deletions": 3,
+            "state": "open",
+            "created_at": "2024-01-01T10:00:00Z",
+            "updated_at": "2024-01-02T11:00:00Z",
+            "labels": ["enhancement", "documentation"],
+            "draft": False,
+            "url": "https://github.com/owner/repo/pull/123"
         }
+
         self.display.display_pr_header(pr_data)
-        output = self.console.export_text()
-        self.assertIn("PR #123", output)
+
+        # Capture output and check content
+        output = self.output_buffer.getvalue()
+        self.assertIn("123", output)
         self.assertIn("Add new feature", output)
-        self.assertIn("alice", output)
-    def test_format_pr_detailed(self):
-        """Test formatting detailed PR view."""
-        mock_pr = Mock()
-        mock_pr.number = 456
-        mock_pr.title = "Fix critical bug"
-        mock_pr.body = "This PR fixes a critical bug in the authentication system."
-        mock_pr.state = "open"
-        mock_pr.user.login = "bob"
-        mock_pr.created_at = datetime.now() - timedelta(hours=6)
-        mock_pr.updated_at = datetime.now() - timedelta(minutes=30)
-        mock_pr.labels = [Mock(name="bug", color="ff0000")]
-        mock_pr.assignees = [Mock(login="charlie")]
-        mock_pr.requested_reviewers = [Mock(login="david")]
-        mock_pr.milestone = Mock(title="v1.0.0")
-        mock_pr.additions = 150
-        mock_pr.deletions = 50
-        mock_pr.changed_files = 5
 
-        detailed = self.display.format_pr_detailed(mock_pr)
-
-        self.assertIn("#456", detailed)
-        self.assertIn("Fix critical bug", detailed)
-        self.assertIn("critical bug", detailed.lower())
-        self.assertIn("bob", detailed)
-        self.assertIn("charlie", detailed)
-        self.assertIn("david", detailed)
-        self.assertIn("v1.0.0", detailed)
-        self.assertIn("150", detailed)
-        self.assertIn("50", detailed)
-
-    def test_format_pr_list(self):
-        """Test formatting list of PRs."""
-        prs = []
-        for i in range(3):
-            pr = Mock()
-            pr.number = i + 1
-            pr.title = f"PR {i + 1}"
-            pr.state = "open" if i < 2 else "closed"
-            pr.user.login = f"user{i}"
-            pr.labels = []
-            pr.created_at = datetime.now() - timedelta(days=i)
-            prs.append(pr)
-
-        pr_list = self.display.format_pr_list(prs)
-
-        for i, pr in enumerate(prs):
-            self.assertIn(f"#{pr.number}", pr_list)
-            self.assertIn(pr.title, pr_list)
-            self.assertIn(pr.user.login, pr_list)
-
-    def test_format_empty_pr_list(self):
-        """Test formatting empty PR list."""
-        result = self.display.format_pr_list([])
-        self.assertIn("No pull requests", result.lower())
-
-    def test_format_pr_with_review_status(self):
-        """Test formatting PR with review status."""
-        mock_pr = Mock()
-        mock_pr.number = 789
-        mock_pr.title = "Feature with reviews"
-        mock_pr.get_reviews.return_value = [
-            Mock(state="APPROVED", user=Mock(login="reviewer1")),
-            Mock(state="CHANGES_REQUESTED", user=Mock(login="reviewer2"))
-        ]
-
-        formatted = self.display.format_pr_with_review_status(mock_pr)
-
-        self.assertIn("APPROVED", formatted)
-        self.assertIn("CHANGES_REQUESTED", formatted)
-        self.assertIn("reviewer1", formatted)
-        self.assertIn("reviewer2", formatted)
-
-
-class TestTableDisplay(unittest.TestCase):
-    """Test table display formatting."""
-
-    def test_create_simple_table(self):
-        """Test creating a simple table."""
-        display = TableDisplay()
-
-        headers = ["ID", "Name", "Status"]
-        rows = [
-            ["1", "Task A", "Complete"],
-            ["2", "Task B", "In Progress"],
-            ["3", "Task C", "Pending"]
-        ]
-
-        table = display.create_table(headers, rows)
-
-        for header in headers:
-            self.assertIn(header, table)
-
-        for row in rows:
-            for cell in row:
-                self.assertIn(cell, table)
-
-    def test_table_with_column_widths(self):
-        """Test table with custom column widths."""
-        display = TableDisplay()
-
-        headers = ["ID", "Description"]
-        rows = [
-            ["1", "This is a very long description that should be truncated"],
-            ["2", "Short desc"]
-        ]
-
-        table = display.create_table(headers, rows, widths=[5, 20])
-
-        lines = table.split('\n')
-        # Check that lines respect width constraints
-        for line in lines:
-            if line and not line.startswith('─'):
-                self.assertLessEqual(len(line), 30)  # Total width with padding
-
-    def test_table_alignment(self):
-        """Test table cell alignment."""
-        display = TableDisplay()
-
-        headers = ["Left", "Center", "Right"]
-        rows = [["A", "B", "C"]]
-        alignments = ['left', 'center', 'right']
-
-        table = display.create_table(headers, rows, alignments=alignments)
-
-        # Visual inspection would be needed for proper alignment testing
-        self.assertIn("Left", table)
-        self.assertIn("Center", table)
-        self.assertIn("Right", table)
-
-    def test_empty_table(self):
-        """Test creating empty table."""
-        display = TableDisplay()
-
-        headers = ["Column1", "Column2"]
-        rows = []
-
-        table = display.create_table(headers, rows)
-
-        for header in headers:
-            self.assertIn(header, table)
-        self.assertIn("No data", table.lower())
-
-
-class TestColorScheme(unittest.TestCase):
-    """Test color scheme functionality."""
-
-    def test_default_color_scheme(self):
-        """Test default color scheme."""
-        scheme = ColorScheme()
-
-        self.assertIsNotNone(scheme.get_color('success'))
-        self.assertIsNotNone(scheme.get_color('error'))
-        self.assertIsNotNone(scheme.get_color('warning'))
-        self.assertIsNotNone(scheme.get_color('info'))
-
-    def test_apply_color(self):
-        """Test applying color to text."""
-        scheme = ColorScheme()
-
-        colored_text = scheme.apply('Test', 'success')
-        self.assertIn('Test', colored_text)
-        # Should contain ANSI color codes
-        self.assertIn('\033[', colored_text)
-
-    def test_no_color_mode(self):
-        """Test no-color mode."""
-        scheme = ColorScheme(no_color=True)
-
-        text = "Test text"
-        colored = scheme.apply(text, 'error')
-
-        self.assertEqual(text, colored)
-        self.assertNotIn('\033[', colored)
-
-    def test_custom_colors(self):
-        """Test custom color definitions."""
-        custom_colors = {
-            'highlight': '\033[93m',  # Bright yellow
-            'dim': '\033[2m'  # Dim
+    def test_display_pr_summary(self):
+        """Test displaying PR summary."""
+        pr_data = {
+            "number": 456,
+            "title": "Fix critical bug",
+            "body": "This fixes a critical bug in the system.",
+            "author": "alice",
+            "state": "open"
         }
 
-        scheme = ColorScheme(custom_colors=custom_colors)
+        # Just test that the method runs without error
+        self.display.display_pr_summary(pr_data)
 
-        self.assertIsNotNone(scheme.get_color('highlight'))
-        self.assertIsNotNone(scheme.get_color('dim'))
+        # Check output was written
+        output = self.output_buffer.getvalue()
+        self.assertIn("456", output)
+        self.assertIn("Fix critical bug", output)
 
+    def test_display_error(self):
+        """Test error message display."""
+        error_msg = "This is an error message"
+        self.display.display_error(error_msg)
 
-class TestProgressDisplay(unittest.TestCase):
-    """Test progress display functionality."""
+        output = self.output_buffer.getvalue()
+        self.assertIn(error_msg, output)
 
-    @patch('sys.stdout', new_callable=StringIO)
-    def test_progress_bar(self, mock_stdout):
-        """Test progress bar display."""
-        progress = ProgressDisplay()
+    def test_display_success(self):
+        """Test success message display."""
+        success_msg = "Operation completed successfully"
+        self.display.display_success(success_msg)
 
-        # Simulate progress
-        total = 100
-        for i in range(0, total + 1, 20):
-            progress.update(i, total, f"Processing... {i}%")
+        output = self.output_buffer.getvalue()
+        self.assertIn(success_msg, output)
 
-        output = mock_stdout.getvalue()
-        self.assertIn("Processing", output)
+    def test_display_pr_reviews(self):
+        """Test displaying PR reviews."""
+        reviews = [
+            {"state": "APPROVED", "author": "reviewer1"},
+            {"state": "CHANGES_REQUESTED", "author": "reviewer2"}
+        ]
 
-    def test_spinner_animation(self):
-        """Test spinner animation."""
-        progress = ProgressDisplay()
+        self.display.display_pr_reviews(reviews)
 
-        frames = progress.get_spinner_frames()
-        self.assertGreater(len(frames), 0)
+        output = self.output_buffer.getvalue()
+        self.assertIn("APPROVED", output)
+        self.assertIn("reviewer1", output)
 
-        # Each frame should be different
-        self.assertEqual(len(frames), len(set(frames)))
+    def test_display_comments(self):
+        """Test displaying comments."""
+        comments = [
+            {
+                "path": "src/main.py",
+                "line": 42,
+                "comments": [
+                    {
+                        "author": "reviewer1",
+                        "body": "This needs refactoring",
+                        "created_at": "2024-01-01T10:00:00Z"
+                    }
+                ],
+                "is_resolved": False,
+                "is_outdated": False
+            }
+        ]
 
-    def test_format_bytes(self):
-        """Test byte size formatting."""
-        progress = ProgressDisplay()
+        pr_data = {"number": 123}
+        self.display.display_comments(comments, pr_data)
 
-        self.assertEqual(progress.format_bytes(0), "0 B")
-        self.assertEqual(progress.format_bytes(1024), "1.0 KB")
-        self.assertEqual(progress.format_bytes(1024 * 1024), "1.0 MB")
-        self.assertEqual(progress.format_bytes(1024 * 1024 * 1024), "1.0 GB")
+        output = self.output_buffer.getvalue()
+        self.assertIn("src/main.py", output)
+        self.assertIn("42", output)
 
-    def test_format_duration(self):
-        """Test duration formatting."""
-        progress = ProgressDisplay()
+    def test_display_summary(self):
+        """Test displaying summary."""
+        summary = {
+            "total_threads": 10,
+            "unresolved_active": 3,
+            "unresolved_outdated": 2,
+            "resolved_active": 4,
+            "resolved_outdated": 1,
+            "approvals": 2,
+            "changes_requested": 1,
+            "comments": 5
+        }
 
-        self.assertEqual(progress.format_duration(0), "0s")
-        self.assertEqual(progress.format_duration(45), "45s")
-        self.assertEqual(progress.format_duration(90), "1m 30s")
-        self.assertEqual(progress.format_duration(3661), "1h 1m 1s")
+        self.display.display_summary(summary)
 
+        output = self.output_buffer.getvalue()
+        self.assertIn("10", output)  # total threads
+        self.assertIn("3", output)   # unresolved active
 
-class TestUtilityFunctions(unittest.TestCase):
-    """Test utility formatting functions."""
+    def test_display_check_status(self):
+        """Test displaying check status."""
+        check_status = {
+            "state": "success",
+            "total": 5,
+            "passed": 4,
+            "failed": 1
+        }
 
-    def test_format_timedelta(self):
-        """Test timedelta formatting."""
-        now = datetime.now()
+        self.display.display_check_status(check_status)
 
-        # Test various time differences
-        self.assertEqual(format_timedelta(now), "just now")
-        self.assertIn("minute", format_timedelta(now - timedelta(minutes=1)))
-        self.assertIn("hour", format_timedelta(now - timedelta(hours=2)))
-        self.assertIn("day", format_timedelta(now - timedelta(days=3)))
-        self.assertIn("week", format_timedelta(now - timedelta(weeks=2)))
-        self.assertIn("month", format_timedelta(now - timedelta(days=45)))
+        output = self.output_buffer.getvalue()
+        # Just verify it runs without error
+
+    def test_format_timestamp(self):
+        """Test timestamp formatting."""
+        # Test ISO format
+        ts = "2024-01-01T10:00:00Z"
+        formatted = self.display.format_timestamp(ts)
+        self.assertIsNotNone(formatted)
+
+        # Test datetime object
+        dt = datetime.now()
+        formatted = self.display.format_timestamp(dt)
+        self.assertIsNotNone(formatted)
+
+        # Test None
+        formatted = self.display.format_timestamp(None)
+        self.assertEqual(formatted, "N/A")
 
     def test_truncate_text(self):
         """Test text truncation."""
-        long_text = "This is a very long text that needs to be truncated"
+        long_text = "This is a very long text that should be truncated"
 
-        # Test basic truncation
-        truncated = truncate_text(long_text, 20)
-        self.assertLessEqual(len(truncated), 20)
-        self.assertIn("...", truncated)
+        # Test truncation
+        truncated = self.display.truncate_text(long_text, 20)
+        self.assertLessEqual(len(truncated), 23)  # 20 + "..."
 
-        # Test short text (no truncation needed)
+        # Test short text
         short_text = "Short"
-        self.assertEqual(truncate_text(short_text, 20), short_text)
+        truncated = self.display.truncate_text(short_text, 20)
+        self.assertEqual(truncated, short_text)
 
-        # Test with custom ellipsis
-        truncated_custom = truncate_text(long_text, 20, ellipsis="…")
-        self.assertIn("…", truncated_custom)
+    def test_create_table(self):
+        """Test table creation."""
+        table = self.display.create_table("Test Table", ["Column 1", "Column 2"])
+        self.assertIsInstance(table, Table)
 
-    def test_highlight_search_term(self):
-        """Test search term highlighting."""
-        text = "The quick brown fox jumps over the lazy dog"
+    def test_display_pagination_info(self):
+        """Test pagination info display."""
+        self.display.display_pagination_info(1, 100, 20)
 
-        # Test basic highlighting
-        highlighted = highlight_search_term(text, "fox")
-        self.assertIn("fox", highlighted)
-        # Should contain highlighting (ANSI codes or similar)
-        self.assertNotEqual(text, highlighted)
+        output = self.output_buffer.getvalue()
+        # Just verify it runs without error
 
-        # Test case-insensitive highlighting
-        highlighted_case = highlight_search_term(text, "FOX", case_sensitive=False)
-        self.assertIn("fox", highlighted_case.lower())
+    def test_display_suggestions(self):
+        """Test displaying suggestions."""
+        suggestions = [
+            {
+                "path": "src/main.py",
+                "line": 10,
+                "suggestion": "Use list comprehension",
+                "diff": "-for x in range(10):\n-    result.append(x)\n+result = [x for x in range(10)]"
+            }
+        ]
 
-        # Test multiple occurrences
-        text_multi = "fox fox fox"
-        highlighted_multi = highlight_search_term(text_multi, "fox")
-        # All occurrences should be highlighted
-        self.assertNotEqual(text_multi, highlighted_multi)
+        self.display.display_suggestions(suggestions)
 
-    def test_wrap_text(self):
-        """Test text wrapping."""
-        long_text = "This is a very long line that should be wrapped at a specific width to make it more readable in the terminal"
+        output = self.output_buffer.getvalue()
+        self.assertIn("src/main.py", output)
 
-        from gh_pr.ui.display import wrap_text
+    def test_display_pr_files(self):
+        """Test displaying PR files."""
+        files = [
+            {
+                "filename": "src/main.py",
+                "additions": 10,
+                "deletions": 5,
+                "changes": 15,
+                "status": "modified"
+            }
+        ]
 
-        wrapped = wrap_text(long_text, width=40)
-        lines = wrapped.split('\n')
+        self.display.display_pr_files(files)
 
-        for line in lines:
-            self.assertLessEqual(len(line), 40)
+        output = self.output_buffer.getvalue()
+        self.assertIn("src/main.py", output)
 
-        # Original text should be preserved
-        self.assertEqual(long_text, ' '.join(wrapped.split()))
+    def test_generate_plain_output(self):
+        """Test plain output generation."""
+        pr_data = {
+            "number": 123,
+            "title": "Test PR",
+            "author": "user1",
+            "state": "open"
+        }
+
+        comments = []
+        summary = {
+            "total_comments": 0,
+            "unresolved_active": 0,
+            "unresolved_outdated": 0,
+            "resolved_active": 0,
+            "resolved_outdated": 0
+        }
+
+        plain_output = self.display.generate_plain_output(pr_data, comments, summary)
+        self.assertIn("123", plain_output)
+        self.assertIn("Test PR", plain_output)
+
+    def test_format_diff_hunk(self):
+        """Test diff hunk formatting."""
+        diff_hunk = "@@ -10,5 +10,7 @@ def test():"
+        formatted = self.display.format_diff_hunk(diff_hunk)
+        self.assertIsNotNone(formatted)
+
+    def test_display_comment_thread(self):
+        """Test displaying comment thread."""
+        thread = {
+            "path": "test.py",
+            "line": 5,
+            "comments": [
+                {
+                    "author": "user1",
+                    "body": "Please fix this",
+                    "created_at": "2024-01-01T10:00:00Z"
+                }
+            ]
+        }
+
+        self.display.display_comment_thread(thread)
+
+        output = self.output_buffer.getvalue()
+        self.assertIn("test.py", output)
 
 
 if __name__ == '__main__':

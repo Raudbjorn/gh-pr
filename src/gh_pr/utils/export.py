@@ -326,8 +326,43 @@ class ExportManager:
         self, results: list[dict[str, Any]], format: str = "markdown", filename: str = None
     ) -> str:
         """Export batch operation report."""
-        # Redirect to the existing method for compatibility
-        return self.export_batch_results(results, format, filename)
+        # For CSV format, use export_batch_results
+        if format == "csv":
+            return self.export_batch_results(results, "report")
+
+        # For other formats, create appropriate report
+        if format == "markdown":
+            lines = ["# Batch Operation Report", ""]
+            for result in results:
+                lines.append(f"## {result.get('pr_identifier', 'Unknown')}")
+                lines.append(f"- Success: {'✅' if result.get('success') else '❌'}")
+                lines.append(f"- Message: {result.get('message', 'N/A')}")
+                if result.get('details'):
+                    lines.append(f"- Details: {json.dumps(result.get('details', {}))}")
+                if result.get('error'):
+                    lines.append(f"- Error: {result.get('error', '')}")
+                lines.append("")
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = filename or f"batch_report_{timestamp}.md"
+            output_path = Path(output_filename)
+            output_path.write_text("\n".join(lines))
+            return str(output_path)
+
+        elif format == "json":
+            export_data = {
+                "results": results,
+                "exported_at": datetime.now().isoformat(),
+            }
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = filename or f"batch_report_{timestamp}.json"
+            output_path = Path(output_filename)
+            output_path.write_text(json.dumps(export_data, indent=2, default=str))
+            return str(output_path)
+
+        else:
+            raise ValueError(f"Unsupported format: {format}")
 
     def _calculate_review_statistics(
         self, pr_data: dict[str, Any], comments: list[dict[str, Any]]
