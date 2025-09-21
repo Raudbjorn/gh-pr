@@ -54,12 +54,12 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
 
     # Add parallel execution
     if parallel:
-        try:
-            import pytest_xdist
+        # Enable -n auto only if pytest-xdist is installed
+        from importlib.util import find_spec
+        if find_spec("xdist"):
             cmd.extend(["-n", "auto"])
-        except ImportError:
+        else:
             print("Warning: pytest-xdist not installed, running tests sequentially")
-
     # Additional options
     cmd.extend([
         "--tb=short",
