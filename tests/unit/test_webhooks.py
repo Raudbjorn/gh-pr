@@ -146,20 +146,18 @@ class TestWebhookHandler(unittest.TestCase):
 
     async def test_handle_event_with_error(self):
         """Test event handling with handler error."""
-        mock_handler = AsyncMock(side_effect=Exception("Handler error"))
+        class _Err:
+            async def can_handle(self, e): return e.type == EventType.PULL_REQUEST
+            async def handle(self, e): raise Exception("Handler error")
+        self.handler.add_handler(_Err())
         event = WebhookEvent(
             type=EventType.PULL_REQUEST,
-            action='opened',
-            payload={'test': 'data'}
+            delivery_id='t-err',
+            payload={'action': 'opened', 'test': 'data'}
         )
-
-        self.handler.register_handler(EventType.PULL_REQUEST, mock_handler)
-        results = await self.handler.handle_event(event)
-
-        # Should handle error gracefully
-        self.assertEqual(len(results), 1)
-        self.assertIn('error', results[0])
-
+        results = await self.handler.handle(event)
+        self.assertEqual(len(results['handlers_executed']), 1)
+        self.assertIn('error', results['handlers_executed'][0])
     def test_parse_github_event(self):
         """Test GitHub event parsing."""
         # WebhookHandler doesn't have parse_github_event method
