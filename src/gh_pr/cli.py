@@ -33,6 +33,7 @@ class CLIConfig:
     """Configuration for CLI command."""
     pr_identifier: Optional[str] = None
     interactive: bool = False
+    tui: bool = False
     repo: Optional[str] = None
     token: Optional[str] = None
     token_info: bool = False
@@ -64,6 +65,9 @@ class CLIConfig:
 @click.argument("pr_identifier", required=False)
 @click.option(
     "-i", "--interactive", is_flag=True, help="Show interactive list of all open PRs to choose from"
+)
+@click.option(
+    "--tui", is_flag=True, help="Launch interactive TUI mode (Terminal User Interface)"
 )
 @click.option(
     "-r", "--repo", help="Specify the repository (default: current repo)", metavar="OWNER/REPO"
@@ -142,6 +146,7 @@ def main(**kwargs) -> None:
     Examples:
         gh-pr                        # Auto-detect PR from current/sub directories
         gh-pr -i                     # Interactive mode - choose from all open PRs
+        gh-pr --tui                  # Launch interactive TUI mode
         gh-pr 53
         gh-pr https://github.com/owner/repo/pull/53
         gh-pr --unresolved-outdated  # Auto-detect PR, show likely fixed issues
@@ -154,19 +159,23 @@ def main(**kwargs) -> None:
         gh-pr --batch                # Batch mode for multiple PRs
         gh-pr --batch-file prs.txt   # Process PRs from file
         gh-pr --batch --resolve-outdated  # Batch resolve outdated comments
+        gh-pr --review-report        # Generate a review report
         gh-pr --token-info           # Display detailed token information
     """
     # Create config from kwargs
     cfg = CLIConfig(**kwargs)
 
+    # Launch TUI mode if requested
+    if cfg.tui:
+        _launch_tui(cfg)
+        return
+
     try:
-        # Initialize services
-        result = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
+        # Initialize all core services
+        result = _initialize_core_services(cfg)
         if result is None:
             return  # Cache was cleared
-        config_manager, cache_manager, token_manager = result
+        config_manager, cache_manager, token_manager, github_client, pr_manager = result
 
         # Handle --token-info flag
         if cfg.token_info:
@@ -183,6 +192,7 @@ def main(**kwargs) -> None:
         # Initialize clients and managers
         github_client = GitHubClient(token_manager.get_token())
         pr_manager = PRManager(github_client, cache_manager)
+        # Initialize display manager
         display_manager = DisplayManager(console, verbose=cfg.verbose)
         export_manager = ExportManager()
 
@@ -265,7 +275,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
     if clear_cache:
         cache_manager.clear()
         console.print("[green]✓ Cache cleared successfully[/green]")
-        return None, None, None
+        return None
 
     token_manager = TokenManager(token=token, config_manager=config_manager)
 
@@ -427,6 +437,33 @@ def _get_batch_pr_identifiers(cfg: CLIConfig) -> list[tuple[str, str, int]]:
     return pr_identifiers
 
 
+def _initialize_core_services(cfg: CLIConfig):
+    """Initialize all core services including GitHub client and PR manager.
+
+    Args:
+        cfg: CLI configuration object
+
+    Returns:
+        Tuple of initialized services or None if cache was cleared
+    """
+    result = _initialize_services(
+        cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
+    )
+    if result is None:
+        return None  # Cache was cleared
+
+    config_manager, cache_manager, token_manager = result
+
+    # Initialize GitHub client
+    github_client = GitHubClient(token_manager.get_token())
+
+    # Initialize PR Manager
+    from .core.pr_manager import PRManager
+    pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
+
+    return config_manager, cache_manager, token_manager, github_client, pr_manager
+
+
 def _display_token_info(token_manager: TokenManager, verbose: bool):
     """Display token information if verbose mode."""
     if not verbose:
@@ -498,9 +535,9 @@ def _display_detailed_token_info(token_manager: TokenManager):
             try:
                 reset_dt = datetime.fromisoformat(reset_time.replace('Z', '+00:00'))
                 console.print(f"  Resets: {reset_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            except (ValueError, AttributeError) as e:
+            except (ValueError, AttributeError):
                 # Log parsing issue but continue gracefully
-                console.print(f"  [dim]Reset time unavailable[/dim]")
+                console.print("  [dim]Reset time unavailable[/dim]")
 
     # Display expiration info
     expiration = token_manager.check_expiration()
@@ -657,8 +694,10 @@ def _handle_automation(
                     console.print(f"  [red]• {error}[/red]")
                 if len(errors) > 3:
                     console.print(f"  [red]... and {len(errors) - 3} more errors[/red]")
-            else:
+            elif accepted_count > 0:
                 console.print(f"[green]✓ Accepted {accepted_count} suggestions[/green]")
+            else:
+                console.print("[dim]No suggestions to accept[/dim]")
         except Exception as e:
             console.print(f"[red]✗ Error accepting suggestions: {str(e)}[/red]")
 
@@ -687,6 +726,39 @@ def _handle_output(
         else:
             console.print("[yellow]⚠ Could not copy to clipboard[/yellow]")
 
+
+def _launch_tui(cfg: CLIConfig) -> None:
+    """Launch the interactive TUI mode."""
+    try:
+        from .ui.interactive import GhPrTUI
+
+        # Initialize all core services
+        result = _initialize_core_services(cfg)
+        if result is None:
+            return  # Cache was cleared
+        config_manager, cache_manager, token_manager, github_client, pr_manager = result
+
+        # Launch the TUI
+        app = GhPrTUI(
+            github_client=github_client,
+            pr_manager=pr_manager,
+            config_manager=config_manager,
+            initial_repo=cfg.repo or config_manager.get("default_repo")
+        )
+        app.run()
+
+    except ImportError:
+        console.print("[red]✗ TUI mode requires Textual library[/red]")
+        console.print("[dim]Install with: pip install textual[/dim]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]TUI mode interrupted[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"[red]Error launching TUI: {e}[/red]")
+        if cfg.verbose:
+            console.print_exception()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

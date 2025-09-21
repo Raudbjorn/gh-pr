@@ -29,7 +29,7 @@ classifiers = [
 
 dependencies = [
     "click>=8.1.0",
-    "pygithub>=2.1.0",
+    "PyGithub>=2.1.0",
     "rich>=13.0.0",
     "textual>=0.40.0",
     "tomli>=2.0.0; python_version < '3.11'",
@@ -76,6 +76,8 @@ packages = ["src/gh_pr"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -120,7 +122,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--verbose",
-    "--cov=gh_pr",
+    "--cov=src/gh_pr",
     "--cov-report=term-missing",
     "--tb=short",
     "--strict-markers",
@@ -140,7 +142,8 @@ markers = [
     "graphql: Tests for GraphQL functionality",
     "batch: Tests for batch operations",
     "export: Tests for export functionality",
-    "phase4: Tests for Phase 4 features"
+    "phase4: Tests for Phase 4 features",
+    "phase5: Tests for Phase 5 features"
 ]
 
 [tool.coverage.run]

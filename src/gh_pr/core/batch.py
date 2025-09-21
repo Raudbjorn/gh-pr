@@ -4,8 +4,8 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from rich.console import Console
 from rich.panel import Panel
@@ -20,6 +20,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from ..auth.permissions import PermissionChecker
 from .pr_manager import PRManager
 
 logger = logging.getLogger(__name__)
