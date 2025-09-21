@@ -115,12 +115,14 @@ class MultiRepoManager:
         Args:
             config_path: Path to configuration file
         """
-        import tomllib
+        try:
+            import tomllib  # py311+
+        except ModuleNotFoundError:
+            import tomli as tomllib  # type: ignore[import-not-found]
 
         try:
             with open(config_path, 'rb') as f:
                 config = tomllib.load(f)
-
             repos_config = config.get('repositories', [])
             for repo_cfg in repos_config:
                 repo = RepoConfig(
