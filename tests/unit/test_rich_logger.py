@@ -414,6 +414,8 @@ class TestTracedDecorator:
     def test_traced_decorator_success(self, mock_get_logger):
         """Test traced decorator on successful function execution."""
         mock_logger = MagicMock()
+        # Mock the _mask_sensitive_env_vars to return input as-is
+        mock_logger._mask_sensitive_env_vars.side_effect = lambda x: x
         mock_get_logger.return_value = mock_logger
 
         @traced()
@@ -427,8 +429,8 @@ class TestTracedDecorator:
         # Check entry and exit logs
         calls = mock_logger.debug.call_args_list
         assert len(calls) == 2
-        assert "ENTER test_function(1, 2, c=4)" in calls[0][0][0]
-        assert "EXIT test_function() -> int" in calls[1][0][0]
+        assert "ENTER test_function(1, 2, c=4)" in str(calls[0][0][0])
+        assert "EXIT test_function() -> int" in str(calls[1][0][0])
 
     @patch("gh_pr.utils.rich_logger.get_logger")
     def test_traced_decorator_exception(self, mock_get_logger):
