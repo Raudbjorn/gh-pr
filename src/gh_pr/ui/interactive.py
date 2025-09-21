@@ -4,6 +4,9 @@ import asyncio
 from typing import Dict, List, Any, Optional, Callable, ClassVar
 from datetime import datetime
 
+# UI Constants
+MAX_TITLE_LENGTH = 50
+
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import Header, Footer, Static, Button, ListView, ListItem, Label, Input
@@ -51,7 +54,7 @@ class PRListItem(ListItem):
             state_color = "grey50"
         else:
             state_color = "yellow"
-        label = f"[bold]#{pr_number}[/bold] - {title[:50]}... by [cyan]{author}[/cyan] [{state_color}]{state}[/{state_color}]"
+        label = f"[bold]#{pr_number}[/bold] - {title[:MAX_TITLE_LENGTH]}... by [cyan]{author}[/cyan] [{state_color}]{state}[/{state_color}]"
 
         super().__init__(Static(label), *args, **kwargs)
 
@@ -638,19 +641,3 @@ class GhPrTUI(App):
                 self.notify("Failed to copy to clipboard", severity="error")
 
 
-def run_tui(
-    github_client: GitHubClient,
-    pr_manager: PRManager,
-    config_manager: ConfigManager,
-    initial_repo: Optional[str] = None,
-) -> None:
-    """Run the TUI application.
-
-    Args:
-        github_client: GitHub API client
-        pr_manager: PR manager instance
-        config_manager: Configuration manager
-        initial_repo: Initial repository to load
-    """
-    app = GhPrTUI(github_client, pr_manager, config_manager, initial_repo)
-    app.run()

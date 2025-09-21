@@ -25,7 +25,7 @@ from .utils.export import ExportManager
 console = Console()
 
 # Constants for backwards compatibility with tests
-MAX_CONTEXT_LINES = 10
+MAX_CONTEXT_LINES = 3
 
 @dataclass
 class CLIConfig:
