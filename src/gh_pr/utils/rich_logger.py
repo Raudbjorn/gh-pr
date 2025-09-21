@@ -21,6 +21,7 @@ import logging
 import logging.handlers
 import os
 import re
+import socket
 import sys
 import threading
 import uuid
@@ -66,7 +67,10 @@ class RichLogger:
         timezone: pytz.BaseTzInfo = DEFAULT_TIMEZONE,
         log_file: Optional[Union[str, Path]] = None,
         console_output: bool = True,
-        file_output: bool = True
+        file_output: bool = True,
+        syslog_output: bool = False,
+        syslog_address: Optional[tuple[str, int]] = None,
+        syslog_facility: int = logging.handlers.SysLogHandler.LOG_USER
     ):
         """
         Initialize the RichLogger.
@@ -84,6 +88,9 @@ class RichLogger:
         self.session_id = SESSION_ID
         self.console_output = console_output
         self.file_output = file_output
+        self.syslog_output = syslog_output
+        self.syslog_address = syslog_address
+        self.syslog_facility = syslog_facility
 
         # Create logger
         self.logger = logging.getLogger(name)
@@ -101,8 +108,20 @@ class RichLogger:
         if file_output:
             self._setup_file_handler(log_file)
 
+        # Setup syslog handler
+        if syslog_output:
+            self._setup_syslog_handler()
+
     def _setup_console_handler(self) -> None:
-        """Setup rich console handler for colorized output."""
+        """
+        Set up rich console handler for colorized output.
+
+        Creates a RichHandler instance with full traceback support
+        and local variable display. Outputs to stderr by default.
+
+        Returns:
+            None
+        """
         console = Console(stderr=True)
         console_handler = RichHandler(
             console=console,
@@ -118,7 +137,20 @@ class RichLogger:
         self.logger.addHandler(console_handler)
 
     def _setup_file_handler(self, log_file: Optional[Union[str, Path]] = None) -> None:
-        """Setup rotating file handler for persistent logging."""
+        """
+        Set up rotating file handler for persistent logging.
+
+        Creates a RotatingFileHandler with automatic rotation when
+        the log file exceeds MAX_LOG_FILE_SIZE. Keeps BACKUP_COUNT
+        number of backup files.
+
+        Args:
+            log_file: Path to log file. If None, uses default location
+                     ~/.cache/gh-pr/logs/gh-pr.log
+
+        Returns:
+            None
+        """
         if log_file is None:
             # Default log file location
             log_dir = Path.home() / ".cache" / "gh-pr" / "logs"
@@ -157,8 +189,59 @@ class RichLogger:
 
         self.logger.addHandler(file_handler)
 
+    def _setup_syslog_handler(self) -> None:
+        """
+        Set up syslog handler for system logging integration.
+
+        Creates a SysLogHandler that can send logs to local or remote
+        syslog servers. Useful for centralized logging infrastructure.
+
+        Returns:
+            None
+
+        Note:
+            If syslog_address is None, attempts to use local syslog.
+            On macOS/Linux, this is typically /dev/log or /var/run/syslog.
+            On Windows, this will use UDP to localhost:514.
+        """
+        try:
+            if self.syslog_address:
+                # Remote syslog server
+                handler = logging.handlers.SysLogHandler(
+                    address=self.syslog_address,
+                    facility=self.syslog_facility,
+                    socktype=socket.SOCK_DGRAM
+                )
+            else:
+                # Local syslog - let SysLogHandler determine the address
+                handler = logging.handlers.SysLogHandler(
+                    facility=self.syslog_facility
+                )
+
+            # Syslog format - simpler than file format
+            syslog_format = (
+                f"%(name)s[{os.getpid()}]: "
+                "%(levelname)s - %(message)s"
+            )
+
+            handler.setFormatter(logging.Formatter(syslog_format))
+            self.logger.addHandler(handler)
+        except Exception as e:
+            # If syslog setup fails, log a warning but don't crash
+            if self.console_output or self.file_output:
+                self.logger.warning(f"Failed to setup syslog handler: {e}")
+
     def _get_caller_info(self) -> dict[str, Any]:
-        """Get information about the calling function."""
+        """
+        Get information about the calling function.
+
+        Walks the stack to find the first frame outside of the
+        logging module, providing accurate caller context.
+
+        Returns:
+            dict: Contains 'filename', 'function', 'lineno', and 'module'
+                 keys with information about the calling code.
+        """
         # Walk the stack to find first frame outside of logging module
         current_file = inspect.getfile(inspect.currentframe())
         for frame_info in inspect.stack()[1:]:
@@ -194,8 +277,6 @@ class RichLogger:
             'API_KEY', 'ACCESS_TOKEN', 'REFRESH_TOKEN', 'AUTH_TOKEN'
         ]
 
-        import re
-
         masked_text = text
         for var, value in os.environ.items():
             if any(pattern in var.upper() for pattern in sensitive_patterns) and value and len(value) > 4:
@@ -213,14 +294,29 @@ class RichLogger:
                 for pattern in patterns:
                     if '=' in pattern:
                         # For assignment patterns, preserve the VAR= part
-                        masked_text = re.sub(pattern, rf'\1{masked_value}', masked_text)
+                        # Use a replacement function to avoid group reference issues
+                        def replacement(match, mv=masked_value):
+                            return match.group(1) + mv
+                        masked_text = re.sub(pattern, replacement, masked_text)
                     else:
-                        masked_text = re.sub(pattern, masked_value, masked_text) af019e40587db64a2b366658b7392473d3b88829
+                        masked_text = re.sub(pattern, masked_value, masked_text)
 
         return masked_text
 
     def _format_message(self, message: str, **kwargs) -> str:
-        """Format message with caller info and security masking."""
+        """
+        Format message with caller info and security masking.
+
+        Combines the message with caller context information and
+        applies security masking to prevent sensitive data leakage.
+
+        Args:
+            message: The log message to format
+            **kwargs: Additional context key-value pairs to include
+
+        Returns:
+            str: Formatted message with context and masked sensitive data
+        """
         caller = self._get_caller_info()
 
         # Format the message with context
@@ -235,30 +331,103 @@ class RichLogger:
         return self._mask_sensitive_env_vars(formatted_msg)
 
     def debug(self, message: str, **kwargs) -> None:
-        """Log debug message with context."""
+        """
+        Log a debug-level message with context.
+
+        Debug messages are typically used for detailed diagnostic
+        information useful during development and troubleshooting.
+
+        Args:
+            message: The debug message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+        """
         self.logger.debug(self._format_message(message, **kwargs))
 
     def info(self, message: str, **kwargs) -> None:
-        """Log info message with context."""
+        """
+        Log an info-level message with context.
+
+        Info messages indicate normal program flow and significant
+        events that are not errors.
+
+        Args:
+            message: The informational message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+        """
         self.logger.info(self._format_message(message, **kwargs))
 
     def warning(self, message: str, **kwargs) -> None:
-        """Log warning message with context."""
+        """
+        Log a warning-level message with context.
+
+        Warning messages indicate potentially harmful situations
+        that should be addressed but don't prevent program execution.
+
+        Args:
+            message: The warning message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+        """
         self.logger.warning(self._format_message(message, **kwargs))
 
     def error(self, message: str, **kwargs) -> None:
-        """Log error message with context."""
+        """
+        Log an error-level message with context.
+
+        Error messages indicate error conditions that might still
+        allow the application to continue running.
+
+        Args:
+            message: The error message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+        """
         self.logger.error(self._format_message(message, **kwargs))
 
     def critical(self, message: str, **kwargs) -> None:
-        """Log critical message with context."""
+        """
+        Log a critical-level message with context.
+
+        Critical messages indicate severe error conditions that
+        will likely cause the program to abort.
+
+        Args:
+            message: The critical message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+        """
         self.logger.critical(self._format_message(message, **kwargs))
 
     def exception(self, message: str, **kwargs) -> None:
-        """Log exception with full traceback.
+        """
+        Log an exception with full traceback.
 
-        This method should be called from within an exception handler to capture
-        the current exception context. The rich handler will format the traceback.
+        This method should be called from within an exception handler
+        to capture the current exception context. The rich handler will
+        format the traceback with syntax highlighting and local variables.
+
+        Args:
+            message: The exception message to log
+            **kwargs: Additional context key-value pairs
+
+        Returns:
+            None
+
+        Note:
+            Must be called from within an except block to capture
+            the exception information.
         """
         # Let the rich handler format the exception with its superior formatting
         self.logger.error(self._format_message(message, **kwargs), exc_info=True)
@@ -267,7 +436,19 @@ class RichLogger:
         """
         Create a child logger with the same configuration.
 
-        The child logger inherits output settings (console_output, file_output) from the parent.
+        The child logger inherits all output settings (console_output,
+        file_output, syslog_output) from the parent logger.
+
+        Args:
+            suffix: String to append to parent logger name
+
+        Returns:
+            RichLogger: New child logger instance
+
+        Example:
+            >>> parent = RichLogger("myapp")
+            >>> child = parent.get_child("module")
+            >>> # child.name will be "myapp.module"
         """
         child_name = f"{self.name}.{suffix}"
         return RichLogger(
@@ -275,7 +456,10 @@ class RichLogger:
             level=self.logger.level,
             timezone=self.timezone,
             console_output=self.console_output,
-            file_output=self.file_output
+            file_output=self.file_output,
+            syslog_output=self.syslog_output,
+            syslog_address=self.syslog_address,
+            syslog_facility=self.syslog_facility
         )
 
 
@@ -353,7 +537,15 @@ def get_logger(name: str = "gh-pr", **kwargs) -> RichLogger:
 
 
 def get_default_logger() -> RichLogger:
-    """Get the default gh-pr logger."""
+    """
+    Get the default gh-pr logger instance.
+
+    Retrieves the global default logger, creating it if it doesn't
+    exist. Thread-safe through internal locking.
+
+    Returns:
+        RichLogger: The default logger instance
+    """
     global _default_logger
     if _default_logger is None:
         _default_logger = get_logger("gh-pr")
@@ -365,19 +557,38 @@ def setup_logging(
     log_file: Optional[Union[str, Path]] = None,
     console_output: bool = True,
     file_output: bool = True,
+    syslog_output: bool = False,
+    syslog_address: Optional[tuple[str, int]] = None,
+    syslog_facility: int = logging.handlers.SysLogHandler.LOG_USER,
     timezone: Optional[pytz.BaseTzInfo] = None
 ) -> RichLogger:
     """
-    Setup application-wide logging configuration.
+    Set up application-wide logging configuration.
+
+    Configures the main application logger with specified output
+    handlers and formatting options. This should typically be
+    called once at application startup.
 
     Args:
-        level: Logging level
-        log_file: Path to log file
-        console_output: Enable console logging
-        file_output: Enable file logging
+        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_file: Path to log file (None for default location)
+        console_output: Enable rich console output to stderr
+        file_output: Enable rotating file output
+        syslog_output: Enable syslog output
+        syslog_address: Tuple of (host, port) for remote syslog,
+                       None for local syslog
+        syslog_facility: Syslog facility code (default: LOG_USER)
+        timezone: Timezone for timestamps (default: Atlantic/Reykjavik)
 
     Returns:
-        Configured main logger
+        RichLogger: Configured main logger instance
+
+    Example:
+        >>> logger = setup_logging(
+        ...     level=logging.DEBUG,
+        ...     syslog_output=True,
+        ...     syslog_address=('localhost', 514)
+        ... )
     """
     return get_logger(
         "gh-pr",
@@ -385,33 +596,96 @@ def setup_logging(
         log_file=log_file,
         console_output=console_output,
         file_output=file_output,
+        syslog_output=syslog_output,
+        syslog_address=syslog_address,
+        syslog_facility=syslog_facility,
         timezone=timezone or DEFAULT_TIMEZONE
     )
 
 
 # Convenience functions for quick logging
 def debug(message: str, **kwargs) -> None:
-    """Quick debug logging."""
+    """
+    Quick debug logging using the default logger.
+
+    Convenience function for logging debug messages without
+    needing to get a logger instance.
+
+    Args:
+        message: The debug message to log
+        **kwargs: Additional context key-value pairs
+
+    Returns:
+        None
+    """
     get_default_logger().debug(message, **kwargs)
 
 
 def info(message: str, **kwargs) -> None:
-    """Quick info logging."""
+    """
+    Quick info logging using the default logger.
+
+    Convenience function for logging informational messages
+    without needing to get a logger instance.
+
+    Args:
+        message: The informational message to log
+        **kwargs: Additional context key-value pairs
+
+    Returns:
+        None
+    """
     get_default_logger().info(message, **kwargs)
 
 
 def warning(message: str, **kwargs) -> None:
-    """Quick warning logging."""
+    """
+    Quick warning logging using the default logger.
+
+    Convenience function for logging warning messages without
+    needing to get a logger instance.
+
+    Args:
+        message: The warning message to log
+        **kwargs: Additional context key-value pairs
+
+    Returns:
+        None
+    """
     get_default_logger().warning(message, **kwargs)
 
 
 def error(message: str, **kwargs) -> None:
-    """Quick error logging."""
+    """
+    Quick error logging using the default logger.
+
+    Convenience function for logging error messages without
+    needing to get a logger instance.
+
+    Args:
+        message: The error message to log
+        **kwargs: Additional context key-value pairs
+
+    Returns:
+        None
+    """
     get_default_logger().error(message, **kwargs)
 
 
 def critical(message: str, **kwargs) -> None:
-    """Quick critical logging."""
+    """
+    Quick critical logging using the default logger.
+
+    Convenience function for logging critical messages without
+    needing to get a logger instance.
+
+    Args:
+        message: The critical message to log
+        **kwargs: Additional context key-value pairs
+
+    Returns:
+        None
+    """
     get_default_logger().critical(message, **kwargs)
 
 
