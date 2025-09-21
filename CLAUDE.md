@@ -72,12 +72,16 @@ black src/ tests/
 
 **PRManager** (`core/pr_manager.py`): Core business logic orchestrating GitHub API calls, comment processing, and filtering. Integrates with both REST API (PyGithub) and GraphQL clients.
 
-**Universal Logging** (`utils/rich_logger.py`): Rich-formatted logging with:
-- Atlantic/Reykjavik timezone standardization
+**Universal Logging** (`utils/rich_logger.py`): Rich-formatted logging with comprehensive features:
+- Rich console output with colors and syntax highlighting
+- File logging with automatic rotation (10MB max, 5 backups)
+- Syslog integration for centralized logging (local and remote)
+- Atlantic/Reykjavik timezone standardization (configurable)
 - Session UUID tracking across all operations
-- Security-aware environment variable masking
-- Function tracing with `@traced` decorator
-- File rotation and structured context logging
+- Security-aware environment variable masking (tokens, keys, passwords)
+- Function tracing with `@traced` decorator for debugging
+- Thread-safe operations with proper locking
+- PEP-257 compliant docstrings and 44 comprehensive unit tests
 
 **BatchOperations** (`core/batch.py`): Concurrent processing framework for multiple PRs with rate limiting, progress tracking, and error handling.
 
