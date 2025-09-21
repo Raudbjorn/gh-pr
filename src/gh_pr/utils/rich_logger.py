@@ -182,14 +182,21 @@ class RichLogger:
             'API_KEY', 'ACCESS_TOKEN', 'REFRESH_TOKEN', 'AUTH_TOKEN'
         ]
 
+        import re
+
         masked_text = text
         for var in os.environ:
             if any(pattern in var.upper() for pattern in sensitive_patterns):
                 value = os.environ[var]
                 if value and len(value) > 4:
-                    # Show first 4 chars and mask the rest
-                    masked_value = value[:4] + '*' * (len(value) - 4)
-                    masked_text = masked_text.replace(value, masked_value)
+                    # Mask only environment variable assignments in the text
+                    # e.g., GH_TOKEN=abcd1234
+                    pattern = re.compile(rf'({re.escape(var)}=)([^\s]+)')
+                    def mask_match(m):
+                        val = m.group(2)
+                        masked_value = val[:4] + '*' * (len(val) - 4) if len(val) > 4 else '*' * len(val)
+                        return m.group(1) + masked_value
+                    masked_text = pattern.sub(mask_match, masked_text)
 
         return masked_text
 
