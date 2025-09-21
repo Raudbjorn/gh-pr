@@ -137,8 +137,22 @@ class RichLogger:
             f"SID:{self.session_id[:8]} | %(message)s"
         )
 
-        formatter = logging.Formatter(file_format)
-        formatter.converter = lambda *args: datetime.now(self.timezone).timetuple()
+        class TimezoneAwareFormatter(logging.Formatter):
+            def __init__(self, fmt=None, datefmt=None, style='%', timezone=None):
+                super().__init__(fmt, datefmt, style)
+                self.timezone = timezone
+
+            def formatTime(self, record, datefmt=None):
+                dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+                if self.timezone:
+                    dt = dt.astimezone(self.timezone)
+                if datefmt:
+                    s = dt.strftime(datefmt)
+                else:
+                    s = dt.isoformat()
+                return s
+
+        formatter = TimezoneAwareFormatter(file_format, timezone=self.timezone)
         file_handler.setFormatter(formatter)
 
         self.logger.addHandler(file_handler)
