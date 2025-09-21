@@ -1,5 +1,6 @@
 """Display and formatting for PR data."""
 
+from datetime import datetime
 from typing import Any
 
 from rich.console import Console, Group
@@ -361,4 +362,164 @@ class DisplayManager:
         output.append(f"Changes requested: {summary['changes_requested']}")
 
         return "\n".join(output)
+
+    def display_pr_summary(self, pr_data: dict[str, Any]) -> None:
+        """
+        Display PR summary information.
+
+        Args:
+            pr_data: PR data dictionary
+        """
+        # Delegate to existing display_pr_header
+        self.display_pr_header(pr_data)
+
+    def display_comment_thread(self, thread: dict[str, Any]) -> None:
+        """
+        Display a single comment thread.
+
+        Args:
+            thread: Thread data dictionary
+        """
+        # Delegate to existing _display_thread method with default parameters
+        self._display_thread(thread, show_code=True, context_lines=3)
+
+    def format_timestamp(self, ts: Any) -> str:
+        """
+        Format timestamp for display.
+
+        Args:
+            ts: Timestamp (ISO string, datetime, or None)
+
+        Returns:
+            Formatted timestamp string
+        """
+        if ts is None:
+            return "N/A"
+
+        if isinstance(ts, str):
+            try:
+                # Handle ISO format with optional Z suffix
+                if ts.endswith('Z'):
+                    ts = ts[:-1] + '+00:00'
+                dt = datetime.fromisoformat(ts)
+                return dt.strftime("%Y-%m-%d %H:%M")
+            except (ValueError, AttributeError):
+                return str(ts)
+
+        return str(ts)
+
+    def format_diff_hunk(self, diff_hunk: str) -> str:
+        """
+        Format diff hunk for display.
+
+        Args:
+            diff_hunk: Diff hunk string
+
+        Returns:
+            Formatted diff string
+        """
+        if not diff_hunk:
+            return ""
+
+        lines = diff_hunk.split('\n')
+        formatted = []
+
+        for line in lines:
+            if line.startswith('-'):
+                formatted.append(line)  # Keep removed lines
+            elif line.startswith('+'):
+                formatted.append(line)  # Keep added lines
+            else:
+                formatted.append(line)
+
+        return '\n'.join(formatted)
+
+    def truncate_text(self, text: str, max_length: int) -> str:
+        """
+        Truncate text to maximum length.
+
+        Args:
+            text: Text to truncate
+            max_length: Maximum length
+
+        Returns:
+            Truncated text with ellipsis if needed
+        """
+        if len(text) <= max_length:
+            return text
+        return text[:max_length] + "..."
+
+    def create_table(self, title: str, columns: list[str]) -> Table:
+        """
+        Create a Rich table with title and columns.
+
+        Args:
+            title: Table title
+            columns: Column names
+
+        Returns:
+            Rich Table instance
+        """
+        table = Table(title=title, show_header=True, header_style="bold")
+        for column in columns:
+            table.add_column(column)
+        return table
+
+    def display_pagination_info(self, current: int, total: int, page_size: int) -> None:
+        """Display pagination information."""
+        self.console.print(f"[dim]Showing {current} of {total} (page size: {page_size})[/dim]")
+
+    def display_pr_reviews(self, reviews: list[dict[str, Any]]) -> None:
+        """Display PR reviews."""
+        for review in reviews:
+            state_color = "green" if review.get("state") == "APPROVED" else "red"
+            self.console.print(
+                f"[{state_color}]{review.get('state', 'UNKNOWN')}[/{state_color}] by @{review.get('author', 'unknown')}"
+            )
+            if review.get("body"):
+                self.console.print(f"  {review['body']}")
+
+    def display_suggestions(self, suggestions: list[dict[str, Any]]) -> None:
+        """Display code suggestions."""
+        for suggestion in suggestions:
+            self.console.print(f"\n[bold]Suggestion for {suggestion.get('path', 'unknown')}:{suggestion.get('line', '?')}[/bold]")
+            if suggestion.get("original"):
+                self.console.print("[red]- " + suggestion["original"] + "[/red]")
+            if suggestion.get("suggestion"):
+                self.console.print("[green]+ " + suggestion["suggestion"] + "[/green]")
+
+    def display_pr_files(self, files: list[dict[str, Any]]) -> None:
+        """Display PR files."""
+        table = self.create_table("Changed Files", ["File", "Status", "+/-"])
+        for file in files:
+            status = file.get("status", "unknown")
+            additions = file.get("additions", 0)
+            deletions = file.get("deletions", 0)
+            table.add_row(
+                file.get("filename", "unknown"),
+                status,
+                f"+{additions}/-{deletions}"
+            )
+        self.console.print(table)
+
+    def display_error(self, message: str) -> None:
+        """Display error message."""
+        self.console.print(f"[red]Error: {message}[/red]")
+
+    def display_success(self, message: str) -> None:
+        """Display success message."""
+        self.console.print(f"[green]✓ {message}[/green]")
+
+    def display_warning(self, message: str) -> None:
+        """Display warning message."""
+        self.console.print(f"[yellow]⚠ {message}[/yellow]")
+
+    def get_status_color(self, status: str) -> str:
+        """Get color for status."""
+        colors = {
+            "open": "green",
+            "closed": "red",
+            "merged": "purple",
+        }
+        return colors.get(status.lower(), "white")
 

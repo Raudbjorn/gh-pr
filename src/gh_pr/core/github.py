@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
@@ -21,7 +21,10 @@ class GitHubClient:
         Args:
             token: GitHub authentication token
         """
-        self.github = Github(token)
+        # Store token privately to avoid accidental exposure
+        self._token = token
+        auth = Auth.Token(token)
+        self.github = Github(auth=auth)
         self._user = None
 
     @property
@@ -111,7 +114,8 @@ class GitHubClient:
                 "created_at": pr.created_at.isoformat() if pr.created_at else None,
                 "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
                 "draft": pr.draft,
-                "mergeable": pr.mergeable,
+                # Skip mergeable field - it triggers expensive API call
+                # "mergeable": pr.mergeable,
                 "labels": [label.name for label in pr.labels],
             })
 
@@ -338,11 +342,14 @@ class GitHubClient:
         # Would need to use requests library directly
         return False
 
-    def get_current_user_login(self) -> str:
+    def get_current_user_login(self) -> Optional[str]:
         """
         Get the login of the current authenticated user.
 
         Returns:
-            User login string
+            User login string or None if error
         """
-        return self.user.login
+        try:
+            return self.user.login
+        except GithubException:
+            return None

@@ -62,16 +62,23 @@ class ClipboardManager:
             return False
 
         try:
-            # Command list is pre-validated and safe - no user input injection possible
-            # Using a list (not string) prevents shell injection attacks
+            # Security: Command list is pre-validated and safe
+            # 1. self.clipboard_cmd is a predefined list, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Input text is passed via stdin, not as command argument
+            # 4. Has implicit timeout via communicate()
             process = subprocess.Popen(
-                self.clipboard_cmd,  # This is safe - it's a list, not a string
+                self.clipboard_cmd,  # Safe: predefined list from _detect_clipboard_command
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            process.communicate(input=text.encode("utf-8"))
+            # Use timeout to prevent hanging
+            process.communicate(input=text.encode("utf-8"), timeout=5)
             return process.returncode == 0
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return False
         except (OSError, subprocess.SubprocessError):
             return False
 
