@@ -293,12 +293,14 @@ class TestSortOptionsMenu:
         """Test handling sort field changes."""
         menu = SortOptionsMenu()
 
-        # Mock radio set event
+        # Mock radio set event with pressed button
         mock_radio_set = Mock()
         mock_radio_set.id = "sort_field"
+        mock_pressed = Mock()
+        mock_pressed.id = "sort_most_comments"
         mock_event = Mock()
         mock_event.radio_set = mock_radio_set
-        mock_event.value = "most_comments"
+        mock_event.pressed = mock_pressed
 
         menu.on_radio_set_changed(mock_event)
         assert menu.current_sort == "most_comments"
@@ -387,12 +389,14 @@ class TestExportMenu:
         """Test handling export format changes."""
         menu = ExportMenu()
 
-        # Mock radio set event
+        # Mock radio set event with pressed button
         mock_radio_set = Mock()
         mock_radio_set.id = "export_format"
+        mock_pressed = Mock()
+        mock_pressed.id = "fmt_json"
         mock_event = Mock()
         mock_event.radio_set = mock_radio_set
-        mock_event.value = "json"
+        mock_event.pressed = mock_pressed
 
         menu.on_radio_set_changed(mock_event)
         assert menu.export_format == "json"
