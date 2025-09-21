@@ -23,12 +23,11 @@ import os
 import re
 import sys
 import threading
-import traceback
 import uuid
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 import pytz
 from rich.console import Console
@@ -146,14 +145,11 @@ class RichLogger:
                 super().__init__(fmt, datefmt, style)
                 self.tz = tz
 
-            def formatTime(self, record, datefmt=None):
+            def formatTime(self, record, datefmt=None):  # noqa: N802
                 dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
                 if self.tz:
                     dt = dt.astimezone(self.tz)
-                if datefmt:
-                    s = dt.strftime(datefmt)
-                else:
-                    s = dt.isoformat()
+                s = dt.strftime(datefmt) if datefmt else dt.isoformat()
                 return s
 
         formatter = TimezoneAwareFormatter(file_format, tz=self.timezone)
@@ -161,7 +157,7 @@ class RichLogger:
 
         self.logger.addHandler(file_handler)
 
-    def _get_caller_info(self) -> Dict[str, Any]:
+    def _get_caller_info(self) -> dict[str, Any]:
         """Get information about the calling function."""
         # Walk the stack to find first frame outside of logging module
         current_file = inspect.getfile(inspect.currentframe())
@@ -200,8 +196,7 @@ class RichLogger:
 
         masked_text = text
         for var, value in os.environ.items():
-            if any(pattern in var.upper() for pattern in sensitive_patterns):
-                if value and len(value) > 4:
+            if any(pattern in var.upper() for pattern in sensitive_patterns) and value and len(value) > 4:
                     # Use word boundaries for more precise replacement
                     # Also mask environment variable assignments like VAR=value
                     escaped_value = re.escape(value)
@@ -311,7 +306,7 @@ def traced(logger: Optional[RichLogger] = None):
                 result = func(*args, **kwargs)
                 log.debug(f"EXIT {func.__name__}() -> {type(result).__name__}")
                 return result
-            except Exception as e:
+            except Exception:
                 log.exception(f"EXCEPTION in {func.__name__}()")
                 raise
 
@@ -320,7 +315,7 @@ def traced(logger: Optional[RichLogger] = None):
 
 
 # Global logger registry with thread safety
-_loggers: Dict[str, RichLogger] = {}
+_loggers: dict[str, RichLogger] = {}
 _default_logger: Optional[RichLogger] = None
 _logger_lock = threading.Lock()
 
