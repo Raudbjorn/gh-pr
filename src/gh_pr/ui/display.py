@@ -1,5 +1,6 @@
 """Display and formatting for PR data."""
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -126,7 +127,6 @@ class DisplayManager:
 
             # Check if body contains markdown
             body = comment.get("body", "")
-            import re
             markdown_patterns = [
                 r"^#",
                 r"```",

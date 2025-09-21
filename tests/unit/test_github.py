@@ -159,7 +159,7 @@ class TestGitHubClient(unittest.TestCase):
         self.mock_github.get_repo.return_value = mock_repo
         mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
 
-        result = self.client.get_open_prs("owner", "repo", limit=10)
+        result = self.client.get_open_prs("owner", "repo", limit=10, include_mergeable=True)
 
         self.assertEqual(len(result), 2)
 

@@ -13,9 +13,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .auth.permissions import PermissionChecker
 from .auth.token import TokenManager
-from .core.batch import BatchOperations, BatchSummary
+from .core.batch import BatchOperations
 from .core.github import GitHubClient
 from .core.pr_manager import PRManager
 from .ui.display import DisplayManager
@@ -26,8 +25,8 @@ from .utils.export import ExportManager
 
 console = Console()
 
-# Constants for backwards compatibility with tests
-MAX_CONTEXT_LINES = 3
+# Constants
+MAX_CONTEXT_LINES = 50  # Maximum number of context lines to show
 
 @dataclass
 class CLIConfig:
@@ -53,9 +52,13 @@ class CLIConfig:
     copy: bool = False
     export: Optional[str] = None
     config: Optional[str] = None
+    # New Phase 4 options
+    batch: bool = False
     batch_file: Optional[str] = None
-    review_report: bool = False
+    export_enhanced: bool = False
+    export_stats: bool = False
     rate_limit: float = 2.0
+    max_concurrent: int = 5
 
 
 @click.command()
@@ -97,7 +100,7 @@ class CLIConfig:
     "-c", "--context",
     default=3,
     help="Number of context lines to show (default: 3)",
-    type=click.IntRange(0, 50)  # Prevent negative or huge values
+    type=click.IntRange(0, MAX_CONTEXT_LINES)  # Prevent negative or huge values
 )
 @click.option("--no-code", is_flag=True, help="Don't show code context")
 @click.option("--no-cache", is_flag=True, help="Bypass cache and fetch fresh data")
@@ -112,18 +115,22 @@ class CLIConfig:
 )
 @click.option("--config", type=click.Path(exists=True), help="Path to config file")
 @click.option(
-    "--batch-file",
-    type=click.Path(exists=True),
-    help="File with list of PR identifiers for batch operations (one per line)"
+    "--batch", is_flag=True, help="Batch mode - process multiple PRs from file or interactive selection"
 )
 @click.option(
-    "--review-report", is_flag=True, help="Generate a review report for the PR"
+    "--batch-file", type=click.Path(exists=True), help="File containing list of PR identifiers (one per line)"
 )
 @click.option(
-    "--rate-limit",
-    type=click.FloatRange(0.1, 10.0),
-    default=2.0,
-    help="Rate limit for batch operations (seconds between API calls, default: 2.0)"
+    "--export-enhanced", is_flag=True, help="Export enhanced CSV with all available comment fields"
+)
+@click.option(
+    "--export-stats", is_flag=True, help="Export review statistics and analytics"
+)
+@click.option(
+    "--rate-limit", type=float, default=2.0, help="Rate limit in seconds between batch operations (default: 2.0)"
+)
+@click.option(
+    "--max-concurrent", type=int, default=5, help="Maximum concurrent batch operations (default: 5)"
 )
 def main(**kwargs) -> None:
     """
@@ -146,8 +153,13 @@ def main(**kwargs) -> None:
         gh-pr --resolve-outdated     # Auto-resolve outdated comments
         gh-pr --accept-suggestions   # Accept all code suggestions
         gh-pr --copy                 # Copy output to clipboard
+        gh-pr --export csv           # Export to CSV format
+        gh-pr --export-enhanced      # Export enhanced CSV with all fields
+        gh-pr --export-stats         # Export review statistics
+        gh-pr --batch                # Batch mode for multiple PRs
+        gh-pr --batch-file prs.txt   # Process PRs from file
+        gh-pr --batch --resolve-outdated  # Batch resolve outdated comments
         gh-pr --review-report        # Generate a review report
-        gh-pr --batch-file prs.txt --resolve-outdated  # Batch resolve outdated comments
         gh-pr --token-info           # Display detailed token information
     """
     # Create config from kwargs
@@ -177,16 +189,19 @@ def main(**kwargs) -> None:
         # Check automation permissions
         _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
 
+        # Initialize clients and managers
+        github_client = GitHubClient(token_manager.get_token())
+        pr_manager = PRManager(github_client, cache_manager)
         # Initialize display manager
         display_manager = DisplayManager(console, verbose=cfg.verbose)
+        export_manager = ExportManager()
 
-        # Handle batch operations
-        if cfg.batch_file:
-            permission_checker = PermissionChecker(token_manager)
-            batch_ops = BatchOperations(pr_manager, permission_checker, rate_limit=cfg.rate_limit)
-            _handle_batch_operations(batch_ops, cfg.batch_file, cfg.resolve_outdated, cfg.accept_suggestions)
+        # Handle batch operations if requested
+        if cfg.batch or cfg.batch_file:
+            _handle_batch_operations(cfg, pr_manager, export_manager, token_manager)
             return
 
+        # Regular single PR processing
         # Determine filter mode
         filter_mode = _determine_filter_mode(cfg.show_all, cfg.resolved_active, cfg.unresolved_outdated, cfg.current_unresolved)
 
@@ -229,8 +244,14 @@ def main(**kwargs) -> None:
         summary = pr_manager.get_pr_summary(owner, repo_name, pr_number)
         display_manager.display_summary(summary)
 
+        # Handle enhanced exports for single PR
+        if cfg.export_enhanced:
+            export_path = export_manager.export_enhanced_csv(pr_data, comments)
+            console.print(f"[green]Enhanced CSV exported to: {export_path}[/green]")
+
         # Handle output
-        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy, cfg.review_report)
+        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
+        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy, clipboard_timeout)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
@@ -263,6 +284,157 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
         sys.exit(1)
 
     return config_manager, cache_manager, token_manager
+
+
+def _handle_batch_operations(cfg: CLIConfig, pr_manager: PRManager, export_manager: ExportManager, token_manager: TokenManager):
+    """Handle batch operations for multiple PRs."""
+    # Initialize batch operations manager
+    batch_ops = BatchOperations(pr_manager)
+    batch_ops.set_rate_limit(cfg.rate_limit)
+    batch_ops.set_concurrency(cfg.max_concurrent)
+
+    # Get list of PR identifiers
+    pr_identifiers = _get_batch_pr_identifiers(cfg)
+
+    if not pr_identifiers:
+        console.print("[yellow]No PRs found for batch processing[/yellow]")
+        return
+
+    console.print(f"[blue]Processing {len(pr_identifiers)} PRs in batch mode...[/blue]")
+
+    # Perform batch operations based on flags
+    if cfg.resolve_outdated:
+        console.print("[yellow]Batch resolving outdated comments...[/yellow]")
+        results = batch_ops.resolve_outdated_comments_batch(pr_identifiers)
+
+        # Create summary for display
+        from gh_pr.core.batch import BatchOperations
+        summary = BatchOperations.create_summary_from_results(results, "comments resolved")
+        batch_ops.print_summary(summary, "Resolve Outdated Comments")
+
+        if cfg.export:
+            # Convert batch results to exportable format
+            batch_results = [
+                {
+                    "pr_number": result.pr_number,
+                    "success": result.success,
+                    "result": result.result,
+                    "errors": result.errors or []
+                }
+                for result in results
+            ]
+            export_path = export_manager.export_batch_report(batch_results, cfg.export)
+            console.print(f"[green]Batch report exported to: {export_path}[/green]")
+
+    elif cfg.accept_suggestions:
+        console.print("[yellow]Batch accepting suggestions...[/yellow]")
+        results = batch_ops.accept_suggestions_batch(pr_identifiers)
+
+        # Create summary for display
+        from gh_pr.core.batch import BatchOperations
+        summary = BatchOperations.create_summary_from_results(results, "suggestions accepted")
+        batch_ops.print_summary(summary, "Accept Suggestions")
+
+        if cfg.export:
+            batch_results = [
+                {
+                    "pr_number": result.pr_number,
+                    "success": result.success,
+                    "result": result.result,
+                    "errors": result.errors or []
+                }
+                for result in results
+            ]
+            export_path = export_manager.export_batch_report(batch_results, cfg.export)
+            console.print(f"[green]Batch report exported to: {export_path}[/green]")
+
+    elif cfg.export_stats:
+        console.print("[yellow]Collecting PR data for statistics...[/yellow]")
+        pr_data_results = batch_ops.get_pr_data_batch(pr_identifiers)
+
+        # Extract successful PR data
+        successful_pr_data = [
+            result.result for result in pr_data_results
+            if result.success and result.result
+        ]
+
+        if successful_pr_data:
+            # Flatten the data structure for statistics
+            flattened_data = []
+            for data in successful_pr_data:
+                if isinstance(data, dict) and "pr_data" in data:
+                    pr_info = data["pr_data"]
+                    pr_info["comments"] = data.get("comments", [])
+                    flattened_data.append(pr_info)
+
+            export_format = cfg.export or "markdown"
+            export_path = export_manager.export_review_statistics(flattened_data, export_format)
+            console.print(f"[green]Review statistics exported to: {export_path}[/green]")
+        else:
+            console.print("[red]No successful PR data collected for statistics[/red]")
+
+    else:
+        # Default batch operation - just collect and display data
+        console.print("[yellow]Collecting PR data...[/yellow]")
+        pr_data_results = batch_ops.get_pr_data_batch(pr_identifiers)
+
+        successful = sum(1 for r in pr_data_results if r.success)
+        failed = len(pr_data_results) - successful
+
+        console.print(f"[green]Batch collection complete: {successful} successful, {failed} failed[/green]")
+
+        if cfg.export:
+            batch_results = [
+                {
+                    "pr_number": result.pr_number,
+                    "success": result.success,
+                    "result": 1 if result.success else 0,
+                    "errors": result.errors or []
+                }
+                for result in pr_data_results
+            ]
+            export_path = export_manager.export_batch_report(batch_results, cfg.export)
+            console.print(f"[green]Batch report exported to: {export_path}[/green]")
+
+
+def _get_batch_pr_identifiers(cfg: CLIConfig) -> list[tuple[str, str, int]]:
+    """Get list of PR identifiers for batch processing."""
+    pr_identifiers = []
+
+    if cfg.batch_file:
+        # Read PR identifiers from file
+        try:
+            with open(cfg.batch_file, 'r') as f:
+                lines = [line.strip() for line in f if line.strip()]
+
+            for line in lines:
+                try:
+                    # Simple parsing - could be enhanced
+                    if '/' in line and '#' in line:
+                        # Format: owner/repo#123
+                        repo_part, pr_part = line.split('#')
+                        owner, repo = repo_part.split('/')
+                        pr_number = int(pr_part)
+                        pr_identifiers.append((owner, repo, pr_number))
+                    elif line.isdigit():
+                        # Just PR number - would need default repo
+                        console.print(f"[yellow]Skipping PR number without repo: {line}[/yellow]")
+                    else:
+                        console.print(f"[yellow]Skipping invalid PR identifier: {line}[/yellow]")
+                except (ValueError, IndexError) as e:
+                    console.print(f"[yellow]Skipping invalid line: {line} ({e})[/yellow]")
+
+        except FileNotFoundError:
+            console.print(f"[red]Batch file not found: {cfg.batch_file}[/red]")
+        except Exception as e:
+            console.print(f"[red]Error reading batch file: {e}[/red]")
+
+    elif cfg.batch:
+        # Interactive batch mode - would need implementation
+        # For now, show an error
+        console.print("[red]Interactive batch mode not yet implemented. Use --batch-file instead.[/red]")
+
+    return pr_identifiers
 
 
 def _initialize_core_services(cfg: CLIConfig):
@@ -500,104 +672,34 @@ def _handle_automation(
 ):
     """Handle automation commands."""
     if resolve_outdated:
-        resolved_count, errors = pr_manager.resolve_outdated_comments(owner, repo_name, pr_number)
-        if resolved_count > 0:
-            console.print(f"[green]✓ Resolved {resolved_count} outdated comments[/green]")
-        if errors:
-            for error in errors:
-                console.print(f"[yellow]⚠ {error}[/yellow]")
-        if resolved_count == 0 and not errors:
-            console.print("[dim]No outdated comments to resolve[/dim]")
+        try:
+            resolved_count, errors = pr_manager.resolve_outdated_comments(owner, repo_name, pr_number)
+            if errors:
+                console.print(f"[yellow]⚠ Resolved {resolved_count} outdated comments with {len(errors)} errors[/yellow]")
+                for error in errors[:3]:  # Show first 3 errors
+                    console.print(f"  [red]• {error}[/red]")
+                if len(errors) > 3:
+                    console.print(f"  [red]... and {len(errors) - 3} more errors[/red]")
+            else:
+                console.print(f"[green]✓ Resolved {resolved_count} outdated comments[/green]")
+        except Exception as e:
+            console.print(f"[red]✗ Error resolving outdated comments: {str(e)}[/red]")
 
     if accept_suggestions:
-        accepted_count, errors = pr_manager.accept_all_suggestions(owner, repo_name, pr_number)
-        if accepted_count > 0:
-            console.print(f"[green]✓ Accepted {accepted_count} suggestions[/green]")
-        if errors:
-            for error in errors:
-                console.print(f"[yellow]⚠ {error}[/yellow]")
-        if accepted_count == 0 and not errors:
-            console.print("[dim]No suggestions to accept[/dim]")
-
-
-def _handle_batch_operations(
-    batch_ops: BatchOperations,
-    batch_file: str,
-    resolve_outdated: bool,
-    accept_suggestions: bool
-):
-    """Handle batch operations for multiple PRs."""
-
-    # Read PR identifiers from file
-    batch_path = Path(batch_file)
-    pr_identifiers = []
-
-    with batch_path.open() as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):  # Skip empty lines and comments
-                pr_identifiers.append(line)
-
-    if not pr_identifiers:
-        console.print("[yellow]No PR identifiers found in batch file[/yellow]")
-        return
-
-    console.print(f"[blue]Processing {len(pr_identifiers)} PRs from batch file[/blue]")
-
-    # Execute batch operations
-    with Progress(console=console) as progress:
-        if resolve_outdated:
-            console.print("\n[bold]Resolving outdated comments...[/bold]")
-            results = batch_ops.resolve_outdated_comments_batch(pr_identifiers, progress)
-            _display_batch_results(results, "resolve_outdated")
-
-        if accept_suggestions:
-            console.print("\n[bold]Accepting suggestions...[/bold]")
-            results = batch_ops.accept_suggestions_batch(pr_identifiers, progress)
-            _display_batch_results(results, "accept_suggestions")
-
-
-def _display_batch_results(results, operation: str):
-    """Display batch operation results."""
-
-    # Create summary from results
-    summary = BatchSummary(total=len(results))
-    for result in results:
-        summary.results.append(result)
-        if result.success:
-            summary.successful += 1
-        else:
-            summary.failed += 1
-            if result.error:
-                summary.errors.append(f"{result.pr_identifier}: {result.error}")
-
-    console.print("\n[bold]Batch Operation Summary[/bold]")
-    console.print(f"Total: {summary.total}")
-    console.print(f"Successful: [green]{summary.successful}[/green]")
-    console.print(f"Failed: [red]{summary.failed}[/red]")
-    console.print(f"Success Rate: {summary.success_rate:.1f}%")
-
-    if summary.errors:
-        console.print("\n[yellow]Errors:[/yellow]")
-        for error in summary.errors[:5]:  # Show first 5 errors
-            console.print(f"  - {error}")
-        if len(summary.errors) > 5:
-            console.print(f"  ... and {len(summary.errors) - 5} more errors")
-
-    # Export results
-    export_manager = ExportManager()
-    results_dicts = [
-        {
-            "pr_identifier": r.pr_identifier,
-            "success": r.success,
-            "message": r.message,
-            "details": r.details,
-            "error": r.error
-        }
-        for r in summary.results
-    ]
-    output_file = export_manager.export_batch_results(results_dicts, operation)
-    console.print(f"\n[green]✓ Batch results exported to {output_file}[/green]")
+        try:
+            accepted_count, errors = pr_manager.accept_all_suggestions(owner, repo_name, pr_number)
+            if errors:
+                console.print(f"[yellow]⚠ Accepted {accepted_count} suggestions with {len(errors)} errors[/yellow]")
+                for error in errors[:3]:  # Show first 3 errors
+                    console.print(f"  [red]• {error}[/red]")
+                if len(errors) > 3:
+                    console.print(f"  [red]... and {len(errors) - 3} more errors[/red]")
+            elif accepted_count > 0:
+                console.print(f"[green]✓ Accepted {accepted_count} suggestions[/green]")
+            else:
+                console.print("[dim]No suggestions to accept[/dim]")
+        except Exception as e:
+            console.print(f"[red]✗ Error accepting suggestions: {str(e)}[/red]")
 
 
 def _handle_output(
@@ -607,21 +709,16 @@ def _handle_output(
     summary: dict,
     export: Optional[str],
     copy: bool,
-    review_report: bool
+    clipboard_timeout: float = 5.0
 ):
     """Handle export and clipboard operations."""
     if export:
+        from .utils.export import ExportManager
         export_manager = ExportManager()
         output_file = export_manager.export(pr_data, comments, format=export)
         console.print(f"[green]✓ Exported to {output_file}[/green]")
 
-    if review_report:
-        export_manager = ExportManager()
-        report_file = export_manager.export_review_report(pr_data, summary)
-        console.print(f"[green]✓ Generated review report: {report_file}[/green]")
-
     if copy:
-        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
         clipboard = ClipboardManager(timeout=clipboard_timeout)
         plain_output = display_manager.generate_plain_output(pr_data, comments, summary)
         if clipboard.copy(plain_output):

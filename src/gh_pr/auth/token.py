@@ -132,8 +132,12 @@ class TokenManager:
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
 
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
+        except subprocess.TimeoutExpired:
+            logger.debug(f"Timeout expired while getting gh CLI token (timeout: {SUBPROCESS_TIMEOUT}s)")
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.debug(f"Failed to get gh CLI token: {e}")
+        except Exception as e:
+            logger.debug(f"Unexpected error getting gh CLI token: {e}")
 
         return None
 

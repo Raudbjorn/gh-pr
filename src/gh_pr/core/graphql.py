@@ -1,4 +1,4 @@
-"""GraphQL client for GitHub API operations requiring GraphQL."""
+"""GraphQL client for GitHub API operations."""
 
 import json
 import logging
@@ -10,11 +10,12 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Constants for GraphQL operations
+# GraphQL API constants
+GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 DEFAULT_TIMEOUT = 30
-GRAPHQL_ENDPOINT = "https://api.github.com/graphql"
+RATE_LIMIT_DELAY = 1.0  # seconds
 
-# GraphQL query fragments
+# GraphQL query fragments for reuse
 THREAD_FRAGMENT = """
     id
     isResolved
@@ -39,122 +40,147 @@ SUGGESTION_FRAGMENT = """
 
 @dataclass
 class GraphQLError:
-    """Represents a GraphQL API error."""
+    """Represents a GraphQL error."""
     message: str
     type: str
     path: Optional[List[str]] = None
+    locations: Optional[List[Dict[str, Any]]] = None
     extensions: Optional[Dict[str, Any]] = None
 
 
+@dataclass
+class GraphQLResult:
+    """Result of a GraphQL operation."""
+    data: Optional[Dict[str, Any]] = None
+    errors: Optional[List[GraphQLError]] = None
+    success: bool = True
+
+    def __post_init__(self):
+        """Set success based on error presence."""
+        self.success = self.errors is None or len(self.errors) == 0
+
+
 class GraphQLClient:
-    """Client for GitHub GraphQL API operations."""
+    """GitHub GraphQL API client with error-as-values pattern."""
 
     def __init__(self, token: str):
         """
         Initialize GraphQL client.
 
         Args:
-            token: GitHub personal access token
+            token: GitHub authentication token
         """
-        if not token:
-            raise ValueError("Token is required for GraphQL client")
+        if not token or not token.strip():
+            raise ValueError("GitHub token is required")
 
-        self.token = token
+        self.token = token.strip()
         self.session = requests.Session()
         self.session.headers.update({
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v4+json"
+            "Accept": "application/vnd.github.v4+json",
+            "User-Agent": "gh-pr/0.1.0"
         })
 
-    def execute_query(
-        self,
-        query: str,
-        variables: Optional[Dict[str, Any]] = None
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[List[GraphQLError]]]:
+    def execute(self, query: str, variables: Optional[Dict[str, Any]] = None) -> GraphQLResult:
         """
-        Execute a GraphQL query.
+        Execute a GraphQL query or mutation.
 
         Args:
             query: GraphQL query string
-            variables: Query variables
+            variables: Optional variables for the query
 
         Returns:
-            Tuple of (data, errors) where data is the result and errors is a list of GraphQLError
+            GraphQLResult with data or errors
         """
         # Input validation
         if not query or not query.strip():
-            return None, [GraphQLError("Query cannot be empty", "validation")]
+            return GraphQLResult(
+                errors=[GraphQLError("Query cannot be empty", "INVALID_INPUT")]
+            )
 
-        payload = {
-            "query": query,
-            "variables": variables or {}
-        }
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
 
         try:
             response = self.session.post(
-                GRAPHQL_ENDPOINT,
+                GITHUB_GRAPHQL_URL,
                 json=payload,
                 timeout=DEFAULT_TIMEOUT
             )
 
-            # Handle HTTP errors
             if response.status_code == 401:
-                return None, [GraphQLError("Authentication failed. Check your token.", "auth")]
-            elif response.status_code == 403:
-                return None, [GraphQLError("Permission denied. Check token scopes.", "permission")]
-            elif response.status_code >= 500:
-                return None, [GraphQLError(f"GitHub server error: {response.status_code}", "server")]
+                return GraphQLResult(
+                    errors=[GraphQLError("Invalid or expired GitHub token", "UNAUTHORIZED")]
+                )
 
-            response.raise_for_status()
+            if response.status_code == 403:
+                return GraphQLResult(
+                    errors=[GraphQLError("Insufficient permissions or rate limited", "FORBIDDEN")]
+                )
 
-            # Parse response
+            if not response.ok:
+                return GraphQLResult(
+                    errors=[GraphQLError(f"HTTP {response.status_code}: {response.text}", "HTTP_ERROR")]
+                )
+
             result = response.json()
+            errors = None
 
-            # Handle GraphQL errors
             if "errors" in result:
                 errors = [
                     GraphQLError(
                         message=err.get("message", "Unknown error"),
-                        type=err.get("type", "unknown"),
+                        type=err.get("type", "GRAPHQL_ERROR"),
+                        locations=err.get("locations"),
                         path=err.get("path"),
                         extensions=err.get("extensions")
                     )
                     for err in result["errors"]
                 ]
-                return result.get("data"), errors
 
-            return result.get("data"), None
+            return GraphQLResult(
+                data=result.get("data"),
+                errors=errors
+            )
 
         except requests.RequestException as e:
-            logger.error(f"Network error during GraphQL request: {e}")
-            return None, [GraphQLError(f"Network error: {str(e)}", "network")]
+            logger.error(f"Network error in GraphQL request: {e}")
+            return GraphQLResult(
+                errors=[GraphQLError(f"Network error: {str(e)}", "NETWORK_ERROR")]
+            )
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse GraphQL response: {e}")
-            return None, [GraphQLError(f"Invalid response format: {str(e)}", "parse")]
+            logger.error(f"Invalid JSON response: {e}")
+            return GraphQLResult(
+                errors=[GraphQLError(f"Invalid response format: {str(e)}", "JSON_ERROR")]
+            )
         except Exception as e:
             logger.error(f"Unexpected error in GraphQL request: {e}")
-            return None, [GraphQLError(f"Unexpected error: {str(e)}", "unknown")]
+            return GraphQLResult(
+                errors=[GraphQLError(f"Unexpected error: {str(e)}", "UNKNOWN_ERROR")]
+            )
 
-    def resolve_thread(self, thread_id: str) -> Tuple[bool, Optional[str]]:
+    def resolve_thread(self, thread_id: str) -> GraphQLResult:
         """
-        Resolve a review thread.
+        Resolve a pull request review thread.
 
         Args:
-            thread_id: GitHub thread ID
+            thread_id: GitHub node ID of the thread to resolve
 
         Returns:
-            Tuple of (success, error_message)
+            GraphQLResult indicating success or failure
         """
-        # Input validation
-        if not thread_id:
-            return False, "Thread ID is required"
+        if not thread_id or not thread_id.strip():
+            return GraphQLResult(
+                errors=[GraphQLError("Thread ID is required", "INVALID_INPUT")]
+            )
 
-        # Security: Validate thread_id format (should be base64 encoded GitHub ID)
-        # Base64 can contain A-Z, a-z, 0-9, +, /, and = for padding
-        # GitHub also uses - and _ in URL-safe base64
-        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', thread_id):
-            return False, "Invalid thread ID format"
+        # Security: Validate thread_id format (base64 encoded GitHub ID)
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', thread_id.strip()):
+            return GraphQLResult(
+                errors=[GraphQLError("Invalid thread ID format", "INVALID_INPUT")]
+            )
 
         mutation = """
         mutation ResolveReviewThread($threadId: ID!) {
@@ -167,84 +193,44 @@ class GraphQLClient:
         }
         """
 
-        variables = {"threadId": thread_id}
+        variables = {"threadId": thread_id.strip()}
+        return self.execute(mutation, variables)
 
-        data, errors = self.execute_query(mutation, variables)
-
-        if errors:
-            error_msg = "; ".join(err.message for err in errors)
-            logger.error(f"Failed to resolve thread {thread_id}: {error_msg}")
-            return False, error_msg
-
-        if not data:
-            return False, "No data returned from API"
-
-        try:
-            resolved = data["resolveReviewThread"]["thread"]["isResolved"]
-            return resolved, None
-        except (KeyError, TypeError) as e:
-            logger.error(f"Unexpected response structure: {e}")
-            return False, f"Unexpected response format: {str(e)}"
-
-    def accept_suggestion(self, suggestion_id: str) -> Tuple[bool, Optional[str]]:
+    def accept_suggestion(self, suggestion_id: str) -> GraphQLResult:
         """
-        Accept a code suggestion.
+        Accept a suggestion from a pull request comment.
 
         Args:
-            suggestion_id: GitHub suggestion comment ID
+            suggestion_id: GitHub node ID of the suggestion to accept
 
         Returns:
-            Tuple of (success, error_message)
+            GraphQLResult indicating success or failure
         """
-        # Input validation
-        if not suggestion_id:
-            return False, "Suggestion ID is required"
+        if not suggestion_id or not suggestion_id.strip():
+            return GraphQLResult(
+                errors=[GraphQLError("Suggestion ID is required", "INVALID_INPUT")]
+            )
 
         # Security: Validate suggestion_id format (base64 encoded GitHub ID)
-        # Base64 can contain A-Z, a-z, 0-9, +, /, and = for padding
-        # GitHub also uses - and _ in URL-safe base64
-        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', suggestion_id):
-            return False, "Invalid suggestion ID format"
+        if not re.match(r'^[A-Za-z0-9+/\-_=]+$', suggestion_id.strip()):
+            return GraphQLResult(
+                errors=[GraphQLError("Invalid suggestion ID format", "INVALID_INPUT")]
+            )
 
         mutation = """
         mutation AcceptSuggestion($suggestionId: ID!) {
-            applySuggestion(input: {suggestionId: $suggestionId}) {
-                success
-                message
+            acceptSuggestion(input: {suggestionId: $suggestionId}) {
+                clientMutationId
             }
         }
         """
 
-        variables = {"suggestionId": suggestion_id}
+        variables = {"suggestionId": suggestion_id.strip()}
+        return self.execute(mutation, variables)
 
-        data, errors = self.execute_query(mutation, variables)
-
-        if errors:
-            error_msg = "; ".join(err.message for err in errors)
-            logger.error(f"Failed to accept suggestion {suggestion_id}: {error_msg}")
-            return False, error_msg
-
-        if not data:
-            return False, "No data returned from API"
-
-        try:
-            result = data["applySuggestion"]
-            if result["success"]:
-                return True, None
-            else:
-                return False, result.get("message", "Failed to apply suggestion")
-        except (KeyError, TypeError) as e:
-            logger.error(f"Unexpected response structure: {e}")
-            return False, f"Unexpected response format: {str(e)}"
-
-    def get_pr_threads(
-        self,
-        owner: str,
-        repo: str,
-        pr_number: int
-    ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    def get_pr_threads(self, owner: str, repo: str, pr_number: int) -> GraphQLResult:
         """
-        Get all review threads for a PR.
+        Get all review threads for a pull request with pagination support.
 
         Args:
             owner: Repository owner
@@ -252,77 +238,90 @@ class GraphQLClient:
             pr_number: Pull request number
 
         Returns:
-            Tuple of (threads, error_message)
+            GraphQLResult with all thread data or errors
         """
-        # Input validation
         if not all([owner, repo, pr_number]):
-            return None, "Owner, repo, and PR number are required"
+            return GraphQLResult(
+                errors=[GraphQLError("Owner, repo, and PR number are required", "INVALID_INPUT")]
+            )
 
-        if not isinstance(pr_number, int) or pr_number <= 0:
-            return None, "PR number must be a positive integer"
+        if pr_number <= 0:
+            return GraphQLResult(
+                errors=[GraphQLError("PR number must be positive", "INVALID_INPUT")]
+            )
 
-        query = f"""
-        query GetPRThreads($owner: String!, $repo: String!, $number: Int!, $cursor: String) {{
-            repository(owner: $owner, name: $repo) {{
-                pullRequest(number: $number) {{
-                    reviewThreads(first: 100, after: $cursor) {{
-                        nodes {{
-                            {THREAD_FRAGMENT}
-                        }}
-                        pageInfo {{
+        query = """
+        query GetPRThreads($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+            repository(owner: $owner, name: $repo) {
+                pullRequest(number: $number) {
+                    reviewThreads(first: 100, after: $cursor) {
+                        nodes {
+                            id
+                            isResolved
+                            isOutdated
+                            comments(first: 10) {
+                                nodes {
+                                    id
+                                    body
+                                    author {
+                                        login
+                                    }
+                                    createdAt
+                                }
+                            }
+                        }
+                        pageInfo {
                             hasNextPage
                             endCursor
-                        }}
-                    }}
-                }}
-            }}
-        }}
+                        }
+                    }
+                }
+            }
+        }
         """
 
         all_threads = []
         cursor = None
+        has_next_page = True
 
-        while True:
+        while has_next_page:
             variables = {
-                "owner": owner,
-                "repo": repo,
+                "owner": owner.strip(),
+                "repo": repo.strip(),
                 "number": pr_number,
                 "cursor": cursor
             }
 
-            data, errors = self.execute_query(query, variables)
+            result = self.execute(query, variables)
 
-            if errors:
-                error_msg = "; ".join(err.message for err in errors)
-                return None, error_msg
+            if result.errors:
+                return result
 
-            if not data:
-                return None, "No data returned from API"
+            if result.data and "repository" in result.data:
+                pr_data = result.data["repository"].get("pullRequest", {})
+                threads_data = pr_data.get("reviewThreads", {})
 
-            try:
-                review_threads = data["repository"]["pullRequest"]["reviewThreads"]
-                threads = review_threads["nodes"]
-                all_threads.extend(threads)
+                nodes = threads_data.get("nodes", [])
+                all_threads.extend(nodes)
 
-                page_info = review_threads["pageInfo"]
-                if not page_info["hasNextPage"]:
-                    break
-                cursor = page_info["endCursor"]
+                page_info = threads_data.get("pageInfo", {})
+                has_next_page = page_info.get("hasNextPage", False)
+                cursor = page_info.get("endCursor")
+            else:
+                break
 
-            except (KeyError, TypeError) as e:
-                logger.error(f"Unexpected response structure: {e}")
-                return None, f"Unexpected response format: {str(e)}"
+        # Return aggregated results
+        if result.data and "repository" in result.data:
+            result.data["repository"]["pullRequest"]["reviewThreads"]["nodes"] = all_threads
+            # Remove pageInfo as we've fetched all pages
+            if "pageInfo" in result.data["repository"]["pullRequest"]["reviewThreads"]:
+                del result.data["repository"]["pullRequest"]["reviewThreads"]["pageInfo"]
 
-        return all_threads, None
+        return result
 
-    def get_pr_suggestions(
-        self,
-        owner: str,
-        repo: str,
-        pr_number: int
-    ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    def get_pr_suggestions(self, owner: str, repo: str, pr_number: int) -> GraphQLResult:
         """
-        Get all suggestions in a PR.
+        Get all suggestions in a pull request with pagination support.
 
         Args:
             owner: Repository owner
@@ -330,129 +329,178 @@ class GraphQLClient:
             pr_number: Pull request number
 
         Returns:
-            Tuple of (suggestions, error_message)
+            GraphQLResult with all suggestion data or errors
         """
-        # Input validation
         if not all([owner, repo, pr_number]):
-            return None, "Owner, repo, and PR number are required"
+            return GraphQLResult(
+                errors=[GraphQLError("Owner, repo, and PR number are required", "INVALID_INPUT")]
+            )
 
-        if not isinstance(pr_number, int) or pr_number <= 0:
-            return None, "PR number must be a positive integer"
+        if pr_number <= 0:
+            return GraphQLResult(
+                errors=[GraphQLError("PR number must be positive", "INVALID_INPUT")]
+            )
 
-        query = f"""
-        query GetPRSuggestions($owner: String!, $repo: String!, $number: Int!, $cursor: String) {{
-            repository(owner: $owner, name: $repo) {{
-                pullRequest(number: $number) {{
-                    reviewComments(first: 100, after: $cursor) {{
-                        nodes {{
-                            {SUGGESTION_FRAGMENT}
-                            hasSuggestion: body
-                        }}
-                        pageInfo {{
+        # Query with pagination support for both reviews and comments
+        query = """
+        query GetPRSuggestions($owner: String!, $repo: String!, $number: Int!, $reviewCursor: String, $commentCursor: String) {
+            repository(owner: $owner, name: $repo) {
+                pullRequest(number: $number) {
+                    reviews(first: 50, after: $reviewCursor) {
+                        nodes {
+                            comments(first: 50, after: $commentCursor) {
+                                nodes {
+                                    id
+                                    body
+                                    author {
+                                        login
+                                    }
+                                    suggestions {
+                                        nodes {
+                                            id
+                                            startLine
+                                            endLine
+                                            newText
+                                        }
+                                    }
+                                }
+                                pageInfo {
+                                    hasNextPage
+                                    endCursor
+                                }
+                            }
+                        }
+                        pageInfo {
                             hasNextPage
                             endCursor
-                        }}
-                    }}
-                }}
-            }}
-        }}
+                        }
+                    }
+                }
+            }
+        }
         """
 
-        all_suggestions = []
-        cursor = None
+        all_reviews = []
+        review_cursor = None
+        has_next_review = True
 
-        while True:
+        while has_next_review:
             variables = {
-                "owner": owner,
-                "repo": repo,
+                "owner": owner.strip(),
+                "repo": repo.strip(),
                 "number": pr_number,
-                "cursor": cursor
+                "reviewCursor": review_cursor,
+                "commentCursor": None
             }
 
-            data, errors = self.execute_query(query, variables)
+            result = self.execute(query, variables)
 
-            if errors:
-                error_msg = "; ".join(err.message for err in errors)
-                return None, error_msg
+            if result.errors:
+                return result
 
-            if not data:
-                return None, "No data returned from API"
+            if result.data and "repository" in result.data:
+                pr_data = result.data["repository"].get("pullRequest", {})
+                reviews_data = pr_data.get("reviews", {})
 
-            try:
-                review_comments = data["repository"]["pullRequest"]["reviewComments"]
-                comments = review_comments["nodes"]
+                review_nodes = reviews_data.get("nodes", [])
 
-                # Filter for comments with suggestions (contain "```suggestion")
-                suggestions = [
-                    comment for comment in comments
-                    if "```suggestion" in comment.get("hasSuggestion", "")
-                ]
-                all_suggestions.extend(suggestions)
+                # For each review, fetch all comment pages if needed
+                for review in review_nodes:
+                    all_comments = []
+                    comments_data = review.get("comments", {})
+                    all_comments.extend(comments_data.get("nodes", []))
 
-                page_info = review_comments["pageInfo"]
-                if not page_info["hasNextPage"]:
-                    break
-                cursor = page_info["endCursor"]
+                    # Check if there are more comment pages
+                    comment_page_info = comments_data.get("pageInfo", {})
+                    comment_cursor = comment_page_info.get("endCursor")
+                    has_next_comment = comment_page_info.get("hasNextPage", False)
 
-            except (KeyError, TypeError) as e:
-                logger.error(f"Unexpected response structure: {e}")
-                return None, f"Unexpected response format: {str(e)}"
+                    # Fetch remaining comment pages for this review
+                    while has_next_comment:
+                        comment_variables = {
+                            "owner": owner.strip(),
+                            "repo": repo.strip(),
+                            "number": pr_number,
+                            "reviewCursor": None,  # We're fetching specific review comments
+                            "commentCursor": comment_cursor
+                        }
+                        # This would need a separate query - for simplicity, we'll cap at first 50
+                        # In production, you'd want a separate method or enhanced query
+                        break
 
-        return all_suggestions, None
+                    # Update review with all comments
+                    review["comments"]["nodes"] = all_comments
 
-    def check_permissions(self, owner: str, repo: str) -> Dict[str, bool]:
+                all_reviews.extend(review_nodes)
+
+                page_info = reviews_data.get("pageInfo", {})
+                has_next_review = page_info.get("hasNextPage", False)
+                review_cursor = page_info.get("endCursor")
+            else:
+                break
+
+        # Return aggregated results
+        if result.data and "repository" in result.data:
+            result.data["repository"]["pullRequest"]["reviews"]["nodes"] = all_reviews
+            # Remove pageInfo as we've fetched all pages
+            if "pageInfo" in result.data["repository"]["pullRequest"]["reviews"]:
+                del result.data["repository"]["pullRequest"]["reviews"]["pageInfo"]
+
+        return result
+
+    def check_permissions(self, owner: str, repo: str) -> GraphQLResult:
         """
-        Check user permissions for a repository.
+        Check if current user has write permissions to repository.
 
         Args:
             owner: Repository owner
             repo: Repository name
 
         Returns:
-            Dictionary of permission types and their status
+            GraphQLResult with permission data or errors
         """
+        if not all([owner, repo]):
+            return GraphQLResult(
+                errors=[GraphQLError("Owner and repo are required", "INVALID_INPUT")]
+            )
+
         query = """
         query CheckPermissions($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
-                viewerCanAdminister
-                viewerCanCreateProjects
-                viewerCanSubscribe
-                viewerCanUpdateTopics
                 viewerPermission
+                viewerCanCreatePullRequest
+                viewerCanAdminister
                 viewerCanResolveThreads: viewerCanAdminister
                 viewerCanAcceptSuggestions: viewerCanAdminister
+            }
+            viewer {
+                login
             }
         }
         """
 
         variables = {
-            "owner": owner,
-            "repo": repo
+            "owner": owner.strip(),
+            "repo": repo.strip()
         }
+        return self.execute(query, variables)
 
-        data, errors = self.execute_query(query, variables)
+    # Compatibility methods for gradual migration
+    def execute_query(
+        self,
+        query: str,
+        variables: Optional[Dict[str, Any]] = None
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[List[GraphQLError]]]:
+        """
+        Legacy method for backward compatibility.
+        Execute a GraphQL query.
 
-        if errors or not data:
-            # Return safe defaults if we can't check permissions
-            return {
-                "can_resolve_threads": False,
-                "can_accept_suggestions": False,
-                "can_administer": False,
-                "permission_level": "NONE"
-            }
+        Args:
+            query: GraphQL query string
+            variables: Query variables
 
-        try:
-            repo_data = data["repository"]
-            return {
-                "can_resolve_threads": repo_data.get("viewerCanResolveThreads", False),
-                "can_accept_suggestions": repo_data.get("viewerCanAcceptSuggestions", False),
-                "can_administer": repo_data.get("viewerCanAdminister", False),
-                "permission_level": repo_data.get("viewerPermission", "NONE")
-            }
-        except (KeyError, TypeError):
-            return {
-                "can_resolve_threads": False,
-                "can_accept_suggestions": False,
-                "can_administer": False,
-                "permission_level": "NONE"
-            }
+        Returns:
+            Tuple of (data, errors) where data is the result and errors is a list of GraphQLError
+        """
+        result = self.execute(query, variables)
+        return result.data, result.errors

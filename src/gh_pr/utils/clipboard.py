@@ -1,5 +1,6 @@
 """Clipboard management with WSL2 support."""
 
+import shlex
 import shutil
 import subprocess
 from typing import Optional
@@ -72,12 +73,13 @@ class ClipboardManager:
             # 1. self.clipboard_cmd is a predefined list, not user input
             # 2. No shell=True (list form prevents injection)
             # 3. Input text is passed via stdin, not as command argument
-            # 4. Has implicit timeout via communicate()
+            # 4. Has configurable timeout via communicate()
             process = subprocess.Popen(
                 self.clipboard_cmd,  # Safe: predefined list from _detect_clipboard_command
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                shell=False,  # Explicitly ensure no shell is used
             )
             # Use configurable timeout to prevent hanging
             process.communicate(input=text.encode("utf-8"), timeout=self.timeout)
