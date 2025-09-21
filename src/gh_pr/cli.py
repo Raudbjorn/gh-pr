@@ -612,10 +612,6 @@ def _launch_tui(cfg: CLIConfig) -> None:
     try:
         from .ui.interactive import GhPrTUI
 
-    if clear_cache:
-        cache_manager.clear()
-        console.print("[green]✓ Cache cleared successfully[/green]")
-        return None
         # Initialize GitHub client
         github_client = GitHubClient(token_manager.get_token())
 

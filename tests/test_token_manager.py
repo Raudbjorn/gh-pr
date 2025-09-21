@@ -22,13 +22,13 @@ class TestTokenManagerInitialization:
         assert manager.token == token
         assert manager._github is None
 
-    @patch.dict(os.environ, {"GH_TOKEN": "ghp_env_token"}, clear=True)  # noqa: S106
+    @patch.dict(os.environ, {"GH_TOKEN": "ghp_env_token"}, clear=True)
     def test_init_with_gh_token_env(self):
         """Test token discovery from GH_TOKEN environment variable."""
         manager = TokenManager()
         assert manager.token == "ghp_env_token"  # noqa: S105
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_github_env_token"}, clear=True)  # noqa: S106
+    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_github_env_token"}, clear=True)
     def test_init_with_github_token_env(self):
         """Test token discovery from GITHUB_TOKEN environment variable."""
         manager = TokenManager()
@@ -40,7 +40,7 @@ class TestTokenManagerInitialization:
         """Test token discovery from gh CLI."""
         # Mock gh CLI response
         mock_result = Mock()
-        mock_result.stdout = "Token: ghp_cli_token_12345"  # noqa: S105
+        mock_result.stdout = "Token: ghp_cli_token_12345"
         mock_result.returncode = 0
         mock_run.return_value = mock_result
 
@@ -51,7 +51,7 @@ class TestTokenManagerInitialization:
     def test_init_with_config_token(self):
         """Test token discovery from configuration file."""
         config = ConfigManager()
-        config.set("github.token", "ghp_config_token")  # noqa: S105
+        config.set("github.token", "ghp_config_token")
 
         manager = TokenManager(config_manager=config)
         assert manager.token == "ghp_config_token"  # noqa: S105

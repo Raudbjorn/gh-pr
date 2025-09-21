@@ -155,8 +155,12 @@ class CommentFilter:
         Returns:
             Filtered list of threads
         """
+        # No-op on empty/blank keywords
+        if not keyword or not keyword.strip():
+            return threads
+
         filtered = []
-        keyword_lower = keyword.lower()
+        keyword_lower = keyword.lower().strip()
 
         for thread in threads:
             has_keyword = any(

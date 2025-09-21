@@ -77,7 +77,14 @@ class ClipboardManager:
             process.communicate(input=text.encode("utf-8"), timeout=5)
             return process.returncode == 0
         except subprocess.TimeoutExpired:
-            process.kill()
+            try:
+                process.kill()
+            finally:
+                # Reap the child to avoid zombies
+                try:
+                    process.communicate()
+                except Exception:
+                    pass
             return False
         except (OSError, subprocess.SubprocessError):
             return False
