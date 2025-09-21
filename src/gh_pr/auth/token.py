@@ -146,8 +146,12 @@ class TokenManager:
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
 
-        except (subprocess.SubprocessError, FileNotFoundError):
-            pass
+        except subprocess.TimeoutExpired:
+            logger.debug(f"Timeout expired while getting gh CLI token (timeout: {SUBPROCESS_TIMEOUT}s)")
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.debug(f"Failed to get gh CLI token: {e}")
+        except Exception as e:
+            logger.debug(f"Unexpected error getting gh CLI token: {e}")
 
         return None
 
@@ -177,8 +181,13 @@ class TokenManager:
             username = user.login  # Force API call
             logger.info("Token validation successful", username=username)
             return True
-        except (GithubException, Exception) as e:
-            logger.warning("Token validation failed",
+        except GithubException as e:
+            logger.warning("Token validation failed (GitHub)",
+                         error=str(e),
+                         error_type=e.__class__.__name__)
+            return False
+        except Exception as e:
+            logger.warning("Token validation failed (unexpected)",
                          error=str(e),
                          error_type=e.__class__.__name__)
             return False
@@ -243,6 +252,11 @@ class TokenManager:
             if token_type == "Fine-grained Personal Access Token" and self.config_manager:
                     token_key = self._get_token_key()
                     stored_expiry = self.config_manager.get(f"tokens.{token_key}.expires_at")
+                    if not stored_expiry:
+                        # legacy key fallback (best-effort; remove when no longer needed)
+                        legacy = self.config_manager.get("tokens.github_pat.expires_at")
+                        if legacy:
+                            stored_expiry = legacy
                     if stored_expiry:
                         info["expires_at"] = stored_expiry
                         # Handle Z suffix in ISO format (replace with +00:00 for fromisoformat compatibility)
@@ -415,8 +429,9 @@ class TokenManager:
             # Store token metadata using consistent token key
             token_key = self._get_token_key()
 
+            info = self.get_token_info() or {}
             metadata = {
-                "type": self.get_token_info().get("type", "Unknown"),
+                "type": info.get("type", "Unknown"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -425,7 +440,7 @@ class TokenManager:
 
             self.config_manager.set(f"tokens.{token_key}", metadata)
             return True
-        except Exception as e:
+        except (KeyError, AttributeError, ValueError) as e:
             logger.error("Failed to store token metadata",
                         error=str(e),
                         error_type=e.__class__.__name__,

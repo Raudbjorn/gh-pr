@@ -6,36 +6,6 @@ from typing import Any
 class CommentFilter:
     """Filter PR comments based on various criteria."""
 
-    def filter(
-        self, threads: list[dict[str, Any]], mode: str = "unresolved"
-    ) -> list[dict[str, Any]]:
-        """
-        Filter comment threads (alias for filter_comments for compatibility).
-
-        Args:
-            threads: List of thread dictionaries
-            mode: Filter mode
-
-        Returns:
-            Filtered list of threads
-        """
-        return self.filter_comments(threads, mode)
-
-    def apply(
-        self, threads: list[dict[str, Any]], mode: str = "unresolved"
-    ) -> list[dict[str, Any]]:
-        """
-        Apply filters to comment threads (alias for filter_comments for compatibility).
-
-        Args:
-            threads: List of thread dictionaries
-            mode: Filter mode
-
-        Returns:
-            Filtered list of threads
-        """
-        return self.filter_comments(threads, mode)
-
     def filter_comments(
         self, threads: list[dict[str, Any]], mode: str = "unresolved"
     ) -> list[dict[str, Any]]:
@@ -155,8 +125,12 @@ class CommentFilter:
         Returns:
             Filtered list of threads
         """
+        # No-op on empty/blank keywords
+        if not keyword or not keyword.strip():
+            return threads
+
         filtered = []
-        keyword_lower = keyword.lower()
+        keyword_lower = keyword.lower().strip()
 
         for thread in threads:
             has_keyword = any(

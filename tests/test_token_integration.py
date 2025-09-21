@@ -239,6 +239,7 @@ class TestTokenPermissions:
 
         return mock_github
 
+
     @pytest.fixture
     def mock_github_with_permissions(self):
         """Mock GitHub with permission testing capabilities."""
@@ -297,6 +298,7 @@ class TestTokenStorage:
 
             mock_github_class.return_value = mock_github
             yield manager, mock_github
+
 
     def test_store_and_retrieve_token_metadata(self):
         """Test storing and retrieving token metadata from configuration."""
@@ -423,6 +425,7 @@ class TestTokenStorage:
                 assert mock_subprocess.call_count >= 1
 
 
+
 class TestCLITokenFeatures:
     """Integration tests for CLI token features."""
 
@@ -453,6 +456,7 @@ class TestCLITokenFeatures:
             "changes_requested": 0,
             "comments": 0,
         }
+
 
     def test_verbose_mode_shows_token_info(self):
         """Test that verbose mode displays token information."""

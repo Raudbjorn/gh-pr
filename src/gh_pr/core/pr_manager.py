@@ -18,29 +18,33 @@ from .graphql import GraphQLClient
 logger = logging.getLogger(__name__)
 
 
+
 class PRManager:
     """Manages PR operations and business logic."""
 
-    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager, token: Optional[str] = None):
+    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager):
         """
         Initialize PRManager.
 
         Args:
             github_client: GitHub API client
             cache_manager: Cache manager instance
-            token: GitHub token for GraphQL client (optional)
         """
         self.github = github_client
         self.cache = cache_manager
         self.comment_processor = CommentProcessor()
         self.filter = CommentFilter()
+        # Initialize GraphQL client with same token as REST client
+        self._graphql_client = None
 
-        # Initialize GraphQL client with provided token or None
-        # If no token provided, GraphQL operations will not be available
-        if token:
-            self.graphql = GraphQLClient(token)
-        else:
-            self.graphql = None
+    @property
+    def graphql(self) -> GraphQLClient:
+        """Get GraphQL client, initializing if needed."""
+        if self._graphql_client is None:
+            # Use the token stored in GitHubClient
+            token = self.github.token
+            self._graphql_client = GraphQLClient(token)
+        return self._graphql_client
 
     def parse_pr_identifier(
         self, identifier: str, default_repo: Optional[str] = None
@@ -124,6 +128,10 @@ class PRManager:
         Returns:
             Tuple of (owner, repo) or None
         """
+        if not _validate_git_repository():
+            logger.debug("Not in a git repository")
+            return None
+
         try:
             # Get remote URL
             result = subprocess.run(
@@ -164,14 +172,11 @@ class PRManager:
         Returns:
             PR identifier or None
         """
+        if not _validate_git_repository():
+            logger.debug("Not in a git repository")
+            return None
+
         try:
-            # Check if we're in a git repo
-            subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
 
             # Get current branch name
             result = subprocess.run(
@@ -245,6 +250,11 @@ class PRManager:
         original_cwd = os.getcwd()
         try:
             os.chdir(directory)
+
+            # Validate git repository in this directory
+            if not _validate_git_repository(directory):
+                logger.debug(f"Directory {directory} is not a git repository")
+                return None
 
             # Get current branch
             result = subprocess.run(
@@ -537,38 +547,81 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Tuple of (number of comments resolved, list of errors)
+            Tuple of (number of comments resolved, list of error messages)
         """
-        resolved_count = 0
         errors = []
+        resolved_count = 0
 
-        if not self.graphql:
-            errors.append("GraphQL client not initialized. Token required for this operation.")
-            return resolved_count, errors
+        # Input validation
+        if not all([owner, repo]):
+            errors.append("Owner and repository name are required")
+            return 0, errors
 
-        # Get all review threads using GraphQL
-        threads, error = self.graphql.get_pr_threads(owner, repo, pr_number)
+        if pr_number <= 0:
+            errors.append("PR number must be positive")
+            return 0, errors
 
-        if error:
-            errors.append(f"Failed to fetch threads: {error}")
-            return resolved_count, errors
+        try:
+            # Check permissions first
+            perm_result = self.graphql.check_permissions(owner, repo)
+            if not perm_result.success:
+                errors.extend([err.message for err in perm_result.errors])
+                return 0, errors
 
-        if not threads:
-            return resolved_count, errors
+            # Check if user has write permissions
+            if perm_result.data:
+                repo_data = perm_result.data.get("repository", {})
+                permission = repo_data.get("viewerPermission", "")
+                if permission not in ["WRITE", "ADMIN", "MAINTAIN"]:
+                    errors.append(f"Insufficient permissions. Need WRITE or higher, got {permission}")
+                    return 0, errors
 
-        # Filter for outdated and unresolved threads
-        for thread in threads:
-            if thread.get("isOutdated") and not thread.get("isResolved"):
+            # Get all review threads
+            threads_result = self.graphql.get_pr_threads(owner, repo, pr_number)
+            if not threads_result.success:
+                errors.extend([err.message for err in threads_result.errors])
+                return 0, errors
+
+            if not threads_result.data:
+                errors.append("No data returned from GitHub API")
+                return 0, errors
+
+            # Extract threads from response
+            pr_data = threads_result.data.get("repository", {}).get("pullRequest", {})
+            if not pr_data:
+                errors.append(f"Pull request #{pr_number} not found")
+                return 0, errors
+
+            threads = pr_data.get("reviewThreads", {}).get("nodes", [])
+
+            # Filter for outdated, unresolved threads
+            outdated_threads = [
+                thread for thread in threads
+                if thread.get("isOutdated", False) and not thread.get("isResolved", False)
+            ]
+
+            logger.info(f"Found {len(outdated_threads)} outdated unresolved threads")
+
+            # Resolve each outdated thread
+            for thread in outdated_threads:
                 thread_id = thread.get("id")
-                if thread_id:
-                    success, error_msg = self.graphql.resolve_thread(thread_id)
-                    if success:
-                        resolved_count += 1
-                        logger.debug(f"Resolved outdated thread {thread_id}")
-                    elif error_msg:
-                        errors.append(f"Thread {thread_id}: {error_msg}")
-                        logger.warning(f"Failed to resolve thread {thread_id}: {error_msg}")
+                if not thread_id:
+                    errors.append("Thread missing ID, skipping")
+                    continue
 
+                resolve_result = self.graphql.resolve_thread(thread_id)
+                if resolve_result.success:
+                    resolved_count += 1
+                    logger.debug(f"Resolved thread {thread_id}")
+                else:
+                    error_msgs = [err.message for err in resolve_result.errors]
+                    errors.append(f"Failed to resolve thread {thread_id}: {'; '.join(error_msgs)}")
+
+        except Exception as e:
+            logger.error(f"Unexpected error resolving outdated comments: {e}")
+            errors.append(f"Unexpected error: {str(e)}")
+
+        logger.info(f"Resolved {resolved_count} outdated comments with {len(errors)} errors")
         return resolved_count, errors
 
     def accept_all_suggestions(
@@ -583,54 +636,82 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Tuple of (number of suggestions accepted, list of errors)
+            Tuple of (number of suggestions accepted, list of error messages)
         """
-        accepted_count = 0
         errors = []
+        accepted_count = 0
 
-        if not self.graphql:
-            errors.append("GraphQL client not initialized. Token required for this operation.")
-            return accepted_count, errors
+        # Input validation
+        if not all([owner, repo]):
+            errors.append("Owner and repository name are required")
+            return 0, errors
 
-        # Get all suggestions using GraphQL
-        suggestions, error = self.graphql.get_pr_suggestions(owner, repo, pr_number)
+        if pr_number <= 0:
+            errors.append("PR number must be positive")
+            return 0, errors
 
-        if error:
-            errors.append(f"Failed to fetch suggestions: {error}")
-            return accepted_count, errors
+        try:
+            # Check permissions first
+            perm_result = self.graphql.check_permissions(owner, repo)
+            if not perm_result.success:
+                errors.extend([err.message for err in perm_result.errors])
+                return 0, errors
 
-        if not suggestions:
-            return accepted_count, errors
+            # Check if user has write permissions
+            if perm_result.data:
+                repo_data = perm_result.data.get("repository", {})
+                permission = repo_data.get("viewerPermission", "")
+                if permission not in ["WRITE", "ADMIN", "MAINTAIN"]:
+                    errors.append(f"Insufficient permissions. Need WRITE or higher, got {permission}")
+                    return 0, errors
 
-        # Accept each suggestion
-        for suggestion in suggestions:
-            suggestion_id = suggestion.get("id")
-            if suggestion_id:
-                success, error_msg = self.graphql.accept_suggestion(suggestion_id)
-                if success:
+            # Get all suggestions in PR
+            suggestions_result = self.graphql.get_pr_suggestions(owner, repo, pr_number)
+            if not suggestions_result.success:
+                errors.extend([err.message for err in suggestions_result.errors])
+                return 0, errors
+
+            if not suggestions_result.data:
+                errors.append("No data returned from GitHub API")
+                return 0, errors
+
+            # Extract suggestions from response
+            pr_data = suggestions_result.data.get("repository", {}).get("pullRequest", {})
+            if not pr_data:
+                errors.append(f"Pull request #{pr_number} not found")
+                return 0, errors
+
+            reviews = pr_data.get("reviews", {}).get("nodes", [])
+            all_suggestions = []
+
+            # Collect all suggestions from all review comments
+            for review in reviews:
+                comments = review.get("comments", {}).get("nodes", [])
+                for comment in comments:
+                    suggestions = comment.get("suggestions", {}).get("nodes", [])
+                    all_suggestions.extend(suggestions)
+
+            logger.info(f"Found {len(all_suggestions)} suggestions to accept")
+
+            # Accept each suggestion
+            for suggestion in all_suggestions:
+                suggestion_id = suggestion.get("id")
+                if not suggestion_id:
+                    errors.append("Suggestion missing ID, skipping")
+                    continue
+
+                accept_result = self.graphql.accept_suggestion(suggestion_id)
+                if accept_result.success:
                     accepted_count += 1
                     logger.debug(f"Accepted suggestion {suggestion_id}")
-                elif error_msg:
-                    errors.append(f"Suggestion {suggestion_id}: {error_msg}")
-                    logger.warning(f"Failed to accept suggestion {suggestion_id}: {error_msg}")
+                else:
+                    error_msgs = [err.message for err in accept_result.errors]
+                    errors.append(f"Failed to accept suggestion {suggestion_id}: {'; '.join(error_msgs)}")
 
+        except Exception as e:
+            logger.error(f"Unexpected error accepting suggestions: {e}")
+            errors.append(f"Unexpected error: {str(e)}")
+
+        logger.info(f"Accepted {accepted_count} suggestions with {len(errors)} errors")
         return accepted_count, errors
-
-    def get_pr_comments(self, owner: str, repo: str, pr_number: int) -> Optional[list[dict[str, Any]]]:
-        """
-        Get PR comments.
-
-        Args:
-            owner: Repository owner
-            repo: Repository name
-            pr_number: PR number
-
-        Returns:
-            List of comment dictionaries or None if error
-        """
-        try:
-            return self.github.get_pr_review_comments(owner, repo, pr_number)
-        except GithubException as e:
-            logger.error(f"Failed to get PR comments: {e}")
-            return None
 

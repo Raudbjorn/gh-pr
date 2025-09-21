@@ -8,19 +8,23 @@ from github.Repository import Repository
 
 from ..utils.rich_logger import get_logger
 
+# Constants for API timeouts
+DEFAULT_TIMEOUT = 30  # seconds
+CONNECTION_TIMEOUT = 10  # seconds
+
 logger = get_logger(__name__)
 
 
 class GitHubClient:
     """Wrapper for GitHub API operations."""
 
-    def __init__(self, token: str, timeout: int = 30):
+    def __init__(self, token: str, timeout: int = DEFAULT_TIMEOUT):
         """
         Initialize GitHubClient.
 
         Args:
             token: GitHub authentication token
-            timeout: Request timeout in seconds (default: 30)
+            timeout: API request timeout in seconds
         """
         logger.info("Initializing GitHubClient", token_length=len(token), timeout=timeout)
 
@@ -29,6 +33,12 @@ class GitHubClient:
         auth = Auth.Token(token)
         self.github = Github(auth=auth, timeout=timeout)
         self._user = None
+        self.timeout = timeout
+
+    @property
+    def token(self) -> str:
+        """Get the GitHub token."""
+        return self._token
 
         logger.debug("GitHubClient initialized successfully")
 
@@ -119,7 +129,7 @@ class GitHubClient:
             return 0
 
     def get_open_prs(
-        self, owner: str, repo: str, limit: int = 30
+        self, owner: str, repo: str, limit: int = 30, include_mergeable: bool = False
     ) -> list[dict[str, Any]]:
         """
         Get list of open PRs in a repository.
@@ -127,18 +137,19 @@ class GitHubClient:
         Args:
             owner: Repository owner
             repo: Repository name
-            limit: Maximum number of PRs to return
+            limit: Maximum number of PRs to return (clamped to 1-100)
+            include_mergeable: Whether to include mergeable status (causes extra API calls)
 
         Returns:
             List of PR dictionaries
         """
+        # Clamp limit to GitHub API bounds
+        limit = max(1, min(limit, 100))
         repository = self.get_repository(owner, repo)
-        prs = []
 
-        for pr in repository.get_pulls(state="open"):
-            if len(prs) >= limit:
-                break
-            prs.append({
+        prs = []
+        for pr in repository.get_pulls(state="open")[:limit]:
+            pr_data = {
                 "number": pr.number,
                 "title": pr.title,
                 "author": pr.user.login,
@@ -150,7 +161,14 @@ class GitHubClient:
                 # Skip mergeable field - it triggers expensive API call
                 # "mergeable": pr.mergeable,
                 "labels": [label.name for label in pr.labels],
-            })
+            }
+
+            # Only fetch mergeable status if explicitly requested
+            # This avoids N+1 API calls in list views
+            if include_mergeable:
+                pr_data["mergeable"] = pr.mergeable
+
+            prs.append(pr_data)
 
         return prs
 
@@ -201,7 +219,7 @@ class GitHubClient:
                 "author": comment.user.login if comment.user else "Unknown",
                 "body": comment.body,
                 "path": comment.path,
-                "line": comment.line if comment.line else comment.original_line,
+                "line": comment.line or comment.original_line,
                 "start_line": comment.start_line if hasattr(comment, 'start_line') else None,
                 "commit_id": comment.commit_id,
                 "created_at": comment.created_at.isoformat() if comment.created_at else None,
@@ -385,4 +403,5 @@ class GitHubClient:
         try:
             return self.user.login
         except GithubException:
+            logger.exception("Failed to get current user login")
             return None

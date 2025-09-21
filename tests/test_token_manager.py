@@ -466,7 +466,7 @@ class TestTokenMetadata:
         assert result is True
         # Token key is first 16 chars of SHA256 hash
         import hashlib
-        token_key = hashlib.sha256("ghp_FAKE_TEST_TOKEN_REPLACED".encode()).hexdigest()[:16]
+        token_key = hashlib.sha256("ghp_classic_token".encode()).hexdigest()[:16]
         stored_value = config.get(f"tokens.{token_key}")
         assert stored_value is not None
         assert stored_value.get("type") == "Classic Personal Access Token"

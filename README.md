@@ -6,7 +6,7 @@ A powerful, feature-rich GitHub Pull Request review tool that enhances your PR w
 
 ### Core Features (From Original Bash Script)
 - [x] **Auto-detection**: Automatically finds PR for current branch or subdirectories
-- [ ] **Interactive Mode**: Choose from all open PRs in a repository
+- [x] **Interactive Mode**: Choose from all open PRs in a repository
 - [x] **Advanced Filtering**:
   - [x] All comments
   - [x] Unresolved comments only
@@ -18,42 +18,52 @@ A powerful, feature-rich GitHub Pull Request review tool that enhances your PR w
 - [x] **Clipboard Support**: WSL2-aware clipboard functionality
 
 ### New Python Features
-- [ ] **Token Management**:
-  - [ ] Accept custom GitHub tokens via environment variable or config
-  - [ ] Token validation and expiration checking
-  - [ ] Display token expiration date and days remaining
-  - [ ] Permission checking before executing commands
-- [ ] **Enhanced PR Information**:
-  - [ ] Show count of open PRs in repository
-  - [ ] Display PR review status and approvals
-  - [ ] Show CI/CD check status
-  - [ ] Display merge conflicts status
-- [ ] **Smart Automation**:
-  - [ ] Auto-resolve outdated comments with permission check
-  - [ ] Accept all suggestions with permission check
-  - [ ] Batch operations support
-- [ ] **Rich Terminal UI**:
-  - [ ] Beautiful formatting with Rich library
-  - [ ] Progress indicators and spinners
-  - [ ] Color-coded status indicators
-  - [ ] Interactive menus with keyboard navigation
-- [ ] **Advanced Caching**:
-  - [ ] Persistent cache across sessions
-  - [ ] Cache invalidation strategies
-  - [ ] Selective cache refresh
-- [ ] **Configuration Management**:
-  - [ ] User configuration file (~/.config/gh-pr/config.toml)
-  - [ ] Project-specific settings (.gh-pr.toml)
-  - [ ] Default filter preferences
-  - [ ] Custom keyboard shortcuts
-- [ ] **Export Capabilities**:
-  - [ ] Export comments to Markdown
-  - [ ] Generate review reports
-  - [ ] CSV export for tracking
-- [ ] **Batch Operations**:
-  - [ ] Process multiple PRs at once
-  - [ ] Bulk comment resolution
-  - [ ] Mass suggestion acceptance
+- [x] **Token Management**:
+  - [x] Accept custom GitHub tokens via environment variable or config
+  - [x] Token validation and expiration checking
+  - [x] Display token expiration date and days remaining
+  - [x] Permission checking before executing commands
+- [x] **Enhanced PR Information**:
+  - [x] Show count of open PRs in repository
+  - [x] Display PR review status and approvals
+  - [x] Show CI/CD check status
+  - [x] Display merge conflicts status
+- [x] **Smart Automation**:
+  - [x] Auto-resolve outdated comments with permission check
+  - [x] Accept all suggestions with permission check
+  - [x] Batch operations support
+- [x] **Rich Terminal UI**:
+  - [x] Beautiful formatting with Rich library
+  - [x] Progress indicators and spinners
+  - [x] Color-coded status indicators
+  - [x] Interactive menus with keyboard navigation
+- [x] **Advanced Caching**:
+  - [x] Persistent cache across sessions
+  - [x] Cache invalidation strategies
+  - [x] Selective cache refresh
+- [x] **Configuration Management**:
+  - [x] User configuration file (~/.config/gh-pr/config.toml)
+  - [x] Project-specific settings (.gh-pr.toml)
+  - [x] Default filter preferences
+  - [x] Custom keyboard shortcuts
+- [x] **Export Capabilities**:
+  - [x] Export comments to Markdown
+  - [x] Generate review reports
+  - [x] CSV export for tracking
+- [x] **Batch Operations**:
+  - [x] Process multiple PRs at once
+  - [x] Bulk comment resolution
+  - [x] Mass suggestion acceptance
+- [x] **Interactive TUI Mode**:
+  - [x] Full terminal user interface with Textual
+  - [x] Real-time PR browsing and filtering
+  - [x] Vim-style keyboard navigation (j/k for up/down)
+  - [x] Interactive filter and sort menus
+  - [x] Theme system with 6 predefined themes (default, dark, light, monokai, dracula, github)
+  - [x] Export functionality from within TUI
+  - [x] Help screen with keyboard shortcuts
+  - [x] Search functionality for PRs and comments
+  - [x] PR details view with comment threads
 - [ ] **Webhook Support** (Future):
   - [ ] Real-time PR updates
   - [ ] Desktop notifications
@@ -91,6 +101,9 @@ gh-pr
 # Interactive mode - choose from open PRs
 gh-pr -i
 
+# Launch interactive TUI mode (Terminal User Interface)
+gh-pr --tui
+
 # View specific PR
 gh-pr 123
 gh-pr https://github.com/owner/repo/pull/123
@@ -122,6 +135,34 @@ gh-pr --export csv            # Export to CSV
 gh-pr --no-cache              # Bypass cache
 gh-pr --clear-cache           # Clear all cache
 ```
+
+## TUI Mode
+
+Launch the interactive Terminal User Interface with `gh-pr --tui` for a full-featured PR review experience.
+
+### Keyboard Shortcuts
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| `q` | Quit | Exit the application |
+| `r` | Refresh | Reload PR data |
+| `j` | Next PR | Move to next PR |
+| `k` | Previous PR | Move to previous PR |
+| `Enter` | Select | View PR details |
+| `s` | Search | Focus the search input |
+| `f` | Filters | Toggle filter menu |
+| `Ctrl+C` | Copy URL | Copy PR URL to clipboard |
+| `?` | Help | Show help screen |
+
+### Available Themes
+
+The TUI supports multiple color themes that can be switched from the settings menu:
+- **default**: VSCode-inspired dark theme
+- **dark**: GitHub dark mode
+- **light**: GitHub light mode
+- **monokai**: Classic Monokai theme
+- **dracula**: Dracula theme
+- **github**: Classic GitHub theme
 
 ## Configuration
 
@@ -160,26 +201,27 @@ custom_filters = [
 
 ## Development Status
 
+### Phase 1: Core Conversion ✅
 - [x] Basic PR fetching and display
 - [x] Comment filtering system
 - [x] Code context display
 
-### Phase 2: Token Management 🚧
-- [ ] Token validation and storage
-- [ ] Permission checking system
-- [ ] Token expiry monitoring
+### Phase 2: Token Management ✅
+- [x] Token validation and storage
+- [x] Permission checking system
+- [x] Token expiry monitoring
 
-### Phase 3: Enhanced Features 📋
-- [ ] Rich terminal formatting
-- [ ] Interactive mode with TUI
-- [ ] Advanced caching system
-- [ ] Configuration management
+### Phase 3: Enhanced Features ✅
+- [x] Rich terminal formatting
+- [x] Interactive mode with TUI
+- [x] Advanced caching system
+- [x] Configuration management
 
-### Phase 4: Automation & Export 📋
-- [ ] Auto-resolve commands
-- [ ] Suggestion acceptance
-- [ ] Export functionality
-- [ ] Batch operations
+### Phase 4: Automation & Export ✅
+- [x] Auto-resolve commands
+- [x] Suggestion acceptance
+- [x] Export functionality
+- [x] Batch operations
 
 ### Phase 5: Advanced Features 🔮
 - [ ] Webhook support

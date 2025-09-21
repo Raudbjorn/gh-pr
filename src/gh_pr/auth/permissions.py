@@ -36,7 +36,6 @@ class PermissionChecker:
         Args:
             token_manager: TokenManager instance with GitHub token
         """
-        from github import Github
         self.github = Github(token_manager.get_token())
 
     def can_perform_operation(

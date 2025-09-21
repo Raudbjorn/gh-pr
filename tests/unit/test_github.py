@@ -12,7 +12,11 @@ from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
-from gh_pr.core.github import GitHubClient, DEFAULT_TIMEOUT, CONNECTION_TIMEOUT
+from gh_pr.core.github import GitHubClient
+
+# Test constants
+DEFAULT_TIMEOUT = 30
+CONNECTION_TIMEOUT = 10
 
 
 class TestGitHubClient(unittest.TestCase):
@@ -155,7 +159,7 @@ class TestGitHubClient(unittest.TestCase):
         self.mock_github.get_repo.return_value = mock_repo
         mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
 
-        result = self.client.get_open_prs("owner", "repo", limit=10)
+        result = self.client.get_open_prs("owner", "repo", limit=10, include_mergeable=True)
 
         self.assertEqual(len(result), 2)
 

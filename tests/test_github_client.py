@@ -1,6 +1,5 @@
 """Unit tests for GitHubClient class."""
 
-import json
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
@@ -22,16 +21,16 @@ class TestGitHubClient:
             yield mock_instance
 
     @pytest.fixture
-    def client(self, mock_github):
+    def client(self, mock_github):  # noqa: ARG002
         """Create a GitHubClient instance with mocked PyGithub."""
-        with patch('gh_pr.core.github.Github'):
-            return GitHubClient("test_token")
+        # Use the existing mock_github fixture without additional patching
+        return GitHubClient("test_token")
 
     def test_init(self):
         """Test GitHubClient initialization."""
-        client = GitHubClient("test_token_123")
-        # Token should be stored privately
-        assert client._token == "test_token_123"
+        client = GitHubClient("test_token_123")  # noqa: S105
+        # Token should be stored and accessible via property
+        assert client.token == "test_token_123"
         assert client.github is not None
         assert client._user is None
 
@@ -116,6 +115,9 @@ class TestGitHubClient:
         mock_pr1.head.ref = "feature-1"
         mock_pr1.created_at = datetime.now(timezone.utc)
         mock_pr1.updated_at = datetime.now(timezone.utc)
+        mock_pr1.labels = []  # Initialize labels as empty list
+        mock_pr1.draft = False  # Initialize draft field
+        mock_pr1.mergeable = True  # Initialize mergeable field
 
         mock_pr2 = Mock()
         mock_pr2.number = 2
@@ -124,6 +126,9 @@ class TestGitHubClient:
         mock_pr2.head.ref = "feature-2"
         mock_pr2.created_at = datetime.now(timezone.utc)
         mock_pr2.updated_at = datetime.now(timezone.utc)
+        mock_pr2.labels = []  # Initialize labels as empty list
+        mock_pr2.draft = False  # Initialize draft field
+        mock_pr2.mergeable = True  # Initialize mergeable field
 
         mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
         mock_github.get_repo.return_value = mock_repo
@@ -151,6 +156,9 @@ class TestGitHubClient:
             mock_pr.head.ref = f"feature-{i}"
             mock_pr.created_at = datetime.now(timezone.utc)
             mock_pr.updated_at = datetime.now(timezone.utc)
+            mock_pr.labels = []  # Initialize labels as empty list
+            mock_pr.draft = False  # Initialize draft field
+            mock_pr.mergeable = True  # Initialize mergeable field
             mock_prs.append(mock_pr)
 
         mock_repo.get_pulls.return_value = mock_prs[:3]  # Simulate GitHub's limit
@@ -242,11 +250,11 @@ class TestGitHubClient:
         mock_comment.created_at = datetime.now(timezone.utc)
         mock_comment.commit_id = "abc123"
 
-        # Simulate missing attributes
-        del mock_comment.start_line
-        del mock_comment.original_start_line
-        del mock_comment.position
-        del mock_comment.original_position
+        # Simulate missing attributes - set to None instead of deleting
+        mock_comment.start_line = None
+        mock_comment.original_start_line = None
+        mock_comment.position = None
+        mock_comment.original_position = None
 
         mock_pr.get_review_comments.return_value = [mock_comment]
         mock_repo.get_pull.return_value = mock_pr
@@ -278,8 +286,8 @@ class TestGitHubClient:
         mock_file2.additions = 20
         mock_file2.deletions = 0
         mock_file2.changes = 20
-        # Simulate missing patch attribute
-        del mock_file2.patch
+        # Simulate missing patch attribute - set to None instead of deleting
+        mock_file2.patch = None
 
         mock_pr.get_files.return_value = [mock_file1, mock_file2]
         mock_repo.get_pull.return_value = mock_pr
@@ -320,8 +328,8 @@ class TestGitHubClient:
         mock_check_run2.started_at = datetime.now(timezone.utc)
         mock_check_run2.completed_at = datetime.now(timezone.utc)
         mock_check_run2.html_url = "https://github.com/..."
-        # Simulate missing output
-        del mock_check_run2.output
+        # Simulate missing output - set to None instead of deleting
+        mock_check_run2.output = None
 
         mock_commit.get_check_runs.return_value = [mock_check_run1, mock_check_run2]
         mock_repo.get_commit.return_value = mock_commit
