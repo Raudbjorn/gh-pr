@@ -1,9 +1,10 @@
 """Theme system for gh-pr TUI with customizable color schemes."""
 
-from typing import Dict, Any, Optional
 from dataclasses import dataclass, replace
-from rich.theme import Theme
+from typing import Dict, Optional
+
 from rich.style import Style
+from rich.theme import Theme
 
 
 @dataclass

@@ -2,10 +2,10 @@
 
 import csv
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-import re
 
 # Constants for test compatibility
 INVALID_FILENAME_CHARS = r'[<>:"/\\|?*]'
@@ -192,7 +192,7 @@ class ExportManager:
         filename = f"pr_{pr_data['number']}_review_report_{timestamp}.md"
 
         lines = []
-        lines.append(f"# Pull Request Review Report")
+        lines.append("# Pull Request Review Report")
         lines.append("")
         lines.append(f"## PR #{pr_data['number']}: {pr_data['title']}")
         lines.append("")

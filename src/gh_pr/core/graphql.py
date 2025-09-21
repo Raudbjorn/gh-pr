@@ -3,9 +3,10 @@
 import json
 import logging
 import re
-from typing import Dict, Any, List, Optional, Tuple
-import requests
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
 
 logger = logging.getLogger(__name__)
 

@@ -1,17 +1,16 @@
 """Interactive menu system for gh-pr TUI."""
 
-from typing import List, Dict, Any, Optional, Callable, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
-from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Static, Button, RadioSet, RadioButton, Select, Switch, Label
-from textual.containers import Vertical, Horizontal, Grid
-from textual.message import Message
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
+from textual.app import ComposeResult
+from textual.containers import Horizontal
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Button, Label, RadioButton, RadioSet, Static, Switch
 
 
 class MenuAction(Enum):

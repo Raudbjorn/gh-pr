@@ -341,9 +341,9 @@ def _display_detailed_token_info(token_manager: TokenManager):
             try:
                 reset_dt = datetime.fromisoformat(reset_time.replace('Z', '+00:00'))
                 console.print(f"  Resets: {reset_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            except (ValueError, AttributeError) as e:
+            except (ValueError, AttributeError):
                 # Log parsing issue but continue gracefully
-                console.print(f"  [dim]Reset time unavailable[/dim]")
+                console.print("  [dim]Reset time unavailable[/dim]")
 
     # Display expiration info
     expiration = token_manager.check_expiration()
@@ -549,7 +549,7 @@ def _display_batch_results(results, operation: str):
             if result.error:
                 summary.errors.append(f"{result.pr_identifier}: {result.error}")
 
-    console.print(f"\n[bold]Batch Operation Summary[/bold]")
+    console.print("\n[bold]Batch Operation Summary[/bold]")
     console.print(f"Total: {summary.total}")
     console.print(f"Successful: [green]{summary.successful}[/green]")
     console.print(f"Failed: [red]{summary.failed}[/red]")

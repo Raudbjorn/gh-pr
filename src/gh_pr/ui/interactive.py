@@ -1,27 +1,19 @@
 """Interactive Terminal User Interface (TUI) for gh-pr using Textual."""
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
-from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Button, ListView, ListItem, Label, Input
-from textual.widget import Widget
-from textual.reactive import reactive
-from textual.binding import Binding
-from textual.message import Message
+from rich import box
 from rich.panel import Panel
 from rich.table import Table
-from rich.syntax import Syntax
-from rich.markdown import Markdown
-from rich.text import Text
-from rich import box
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal
+from textual.widget import Widget
+from textual.widgets import Button, Footer, Header, Input, ListItem, ListView, Static
 
 from ..core.github import GitHubClient
 from ..core.pr_manager import PRManager
-from ..auth.token import TokenManager
-from ..utils.cache import CacheManager
 from ..utils.config import ConfigManager
 
 

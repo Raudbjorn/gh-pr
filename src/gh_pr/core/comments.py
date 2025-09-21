@@ -2,8 +2,9 @@
 
 import datetime
 import hashlib
-from typing import Any, Optional
 from functools import lru_cache
+from typing import Any, Optional
+
 
 # Helper function for backwards compatibility with tests
 @lru_cache(maxsize=128)
