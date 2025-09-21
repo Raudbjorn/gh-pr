@@ -32,6 +32,7 @@ class ConfigManager:
         },
         "clipboard": {
             "auto_strip_ansi": True,
+            "timeout_seconds": 5.0,
         },
     }
 
@@ -90,9 +91,16 @@ class ConfigManager:
         """
         Recursively merge configuration dictionaries.
 
+        Algorithm:
+            1. Iterate through each key-value pair in the update dictionary
+            2. If key exists in base AND both values are dictionaries: recurse
+            3. Otherwise: overwrite base[key] with update[key]
+
+        This preserves the deep structure while allowing selective overwrites.
+
         Args:
-            base: Base configuration
-            update: Update configuration
+            base: Base configuration dictionary (modified in place)
+            update: Update configuration dictionary (values to merge in)
         """
         for key, value in update.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
@@ -240,7 +248,28 @@ class ConfigManager:
 
     def merge(self, additional_config: dict[str, Any]) -> None:
         """
-        Merge additional configuration.
+        Merge additional configuration into the current configuration.
+
+        This method performs a deep merge of configuration dictionaries:
+        - For nested dictionaries: Merges recursively, preserving existing keys
+        - For scalar values: New values completely replace existing values
+        - For new keys: Adds them to the configuration
+        - Modifies the existing configuration in place
+
+        Merge Behavior Examples:
+            Base config: {"github": {"token": "old", "check_expiry": True}}
+            Additional: {"github": {"token": "new"}, "cache": {"enabled": False}}
+            Result: {"github": {"token": "new", "check_expiry": True}, "cache": {"enabled": False}}
+
+            Base config: {"display": {"theme": "dark", "lines": 5}}
+            Additional: {"display": {"theme": "light"}}
+            Result: {"display": {"theme": "light", "lines": 5}}
+
+        Use Cases:
+            - Runtime configuration overrides from CLI arguments
+            - User-specific configuration layered over defaults
+            - Dynamic configuration updates during execution
+            - Token metadata storage (adds new token entries without affecting others)
 
         Note:
             This method modifies the existing configuration in place.
@@ -248,6 +277,12 @@ class ConfigManager:
             additional_config will override existing values with the same key.
 
         Args:
-            additional_config: Configuration to merge into current config
+            additional_config: Configuration dictionary to merge into current config.
+                              Must be a valid dictionary structure matching config schema.
+
+        Raises:
+            TypeError: If additional_config is not a dictionary or contains invalid types
         """
+        if not isinstance(additional_config, dict):
+            raise TypeError("additional_config must be a dictionary")
         self._merge_config(self.config, additional_config)

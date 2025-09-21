@@ -18,13 +18,56 @@ from gh_pr.utils.config import ConfigManager
 class TestTokenIntegration:
     """Integration tests for token management."""
 
+    def _create_mock_github_with_user(self, username="testuser"):
+        """Create a mock GitHub instance with user setup."""
+        mock_github = Mock()
+        mock_user = Mock()
+        mock_user.login = username
+        mock_github.get_user.return_value = mock_user
+        return mock_github
+
+    def _create_mock_rate_limit(self, limit=5000, remaining=4999, hours_until_reset=1):
+        """Create a mock rate limit object."""
+        mock_rate_limit = Mock()
+        mock_rate_limit.core.limit = limit
+        mock_rate_limit.core.remaining = remaining
+        mock_rate_limit.core.reset = datetime.now(timezone.utc) + timedelta(hours=hours_until_reset)
+        return mock_rate_limit
+
+    def _setup_complete_github_mock(self, username="testuser"):
+        """Create a complete GitHub mock with user and rate limit."""
+        mock_github = self._create_mock_github_with_user(username)
+        mock_rate_limit = self._create_mock_rate_limit()
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+        return mock_github
+
+    def _create_mock_github_with_permissions(self, username="testuser"):
+        """Create a GitHub mock with user and repository permissions."""
+        mock_github = self._create_mock_github_with_user(username)
+
+        # Setup repository access
+        mock_repos = Mock()
+        mock_repos.totalCount = 2
+        mock_repo = Mock()
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+        mock_repos.__getitem__ = Mock(return_value=mock_repo)
+
+        mock_github.get_user.return_value.get_repos.return_value = mock_repos
+
+        # Add rate limit
+        mock_rate_limit = self._create_mock_rate_limit()
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+
+        return mock_github
+
     @pytest.fixture
     def temp_config_file(self):
         """Create a temporary config file for testing."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
             f.write("""
 [github]
-token = "ghp_test_config_token_12345"  # noqa: S105
+token = "ghp_FAKE_CONFIG_TOKEN_FOR_TESTS_ONLY"  # noqa: S105
 check_token_expiry = true
 
 [cache]
@@ -38,24 +81,14 @@ enabled = false
     def mock_github(self):
         """Mock GitHub API responses."""
         with patch("gh_pr.auth.token.Github") as mock_github_class:
-            mock_github = Mock()
-            mock_user = Mock()
-            mock_user.login = "testuser"
-            mock_github.get_user.return_value = mock_user
-
-            mock_rate_limit = Mock()
-            mock_rate_limit.core.limit = 5000
-            mock_rate_limit.core.remaining = 4999
-            mock_rate_limit.core.reset = datetime.now(timezone.utc) + timedelta(hours=1)
-            mock_github.get_rate_limit.return_value = mock_rate_limit
-
+            mock_github = self._setup_complete_github_mock()
             mock_github_class.return_value = mock_github
             yield mock_github
 
     def test_token_info_command(self, mock_github):
         """Test --token-info command displays detailed token information."""
         runner = CliRunner()
-        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token_12345"}):  # noqa: S106
+        with patch.dict(os.environ, {"GH_TOKEN": "ghp_FAKE_ENV_TOKEN_FOR_TESTS"}):  # noqa: S106
             result = runner.invoke(main, ["--token-info"])
 
         assert result.exit_code == 0
@@ -180,32 +213,37 @@ enabled = false
 class TestTokenPermissions:
     """Integration tests for permission checking."""
 
+    def _create_mock_github_with_permissions(self, username="testuser"):
+        """Create a GitHub mock with user and repository permissions."""
+        mock_github = Mock()
+        mock_user = Mock()
+        mock_user.login = username
+        mock_github.get_user.return_value = mock_user
+
+        # Setup repository access
+        mock_repos = Mock()
+        mock_repos.totalCount = 2
+        mock_repo = Mock()
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+        mock_repos.__getitem__ = Mock(return_value=mock_repo)
+
+        mock_user.get_repos.return_value = mock_repos
+
+        # Add rate limit
+        mock_rate_limit = Mock()
+        mock_rate_limit.core.limit = 5000
+        mock_rate_limit.core.remaining = 4999
+        mock_rate_limit.core.reset = datetime.now(timezone.utc) + timedelta(hours=1)
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+
+        return mock_github
+
     @pytest.fixture
     def mock_github_with_permissions(self):
         """Mock GitHub with permission testing capabilities."""
         with patch("gh_pr.auth.token.Github") as mock_github_class:
-            mock_github = Mock()
-            mock_user = Mock()
-            mock_user.login = "testuser"
-
-            # Setup repository access
-            mock_repos = Mock()
-            mock_repos.totalCount = 2
-            mock_repo = Mock()
-            mock_repo.get_pulls.return_value = []
-            mock_repo.get_issues.return_value = []
-            mock_repos.__getitem__ = Mock(return_value=mock_repo)
-
-            mock_user.get_repos.return_value = mock_repos
-            mock_github.get_user.return_value = mock_user
-
-            # Setup rate limit
-            mock_rate_limit = Mock()
-            mock_rate_limit.core.limit = 5000
-            mock_rate_limit.core.remaining = 4999
-            mock_rate_limit.core.reset = datetime.now(timezone.utc) + timedelta(hours=1)
-            mock_github.get_rate_limit.return_value = mock_rate_limit
-
+            mock_github = self._create_mock_github_with_permissions()
             mock_github_class.return_value = mock_github
             yield mock_github
 
@@ -213,7 +251,7 @@ class TestTokenPermissions:
         """Test permission checking before automation commands."""
         runner = CliRunner()
 
-        with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):  # noqa: S106
+        with patch.dict(os.environ, {"GH_TOKEN": "ghp_FAKE_TEST_TOKEN_PERMISSIONS"}):  # noqa: S106
             # Try to use automation without proper permissions
             with patch("gh_pr.auth.token.TokenManager.has_permissions") as mock_perm:
                 mock_perm.return_value = False
@@ -258,7 +296,9 @@ class TestTokenStorage:
 
             # Load config in new instance
             config2 = ConfigManager(str(config_path))
-            stored_metadata = config2.get("tokens.github_pat")
+            # Get the hashed token key that was actually stored
+            token_key = manager._get_token_key()
+            stored_metadata = config2.get(f"tokens.{token_key}")
 
             assert stored_metadata is not None
             assert stored_metadata["expires_at"] == expires_at
@@ -268,12 +308,13 @@ class TestTokenStorage:
         """Test loading token expiration from stored metadata."""
         config = ConfigManager()
 
-        # Store metadata for a token
-        future_date = datetime.now(timezone.utc) + timedelta(days=30)
-        config.set("tokens.github_pat.expires_at", future_date.isoformat())
-
-        # Create token manager with this config
+        # Create token manager first to get the proper hashed key
         manager = TokenManager(token="github_pat_12345", config_manager=config)  # noqa: S106
+        token_key = manager._get_token_key()
+
+        # Store metadata for a token using the correct hashed key
+        future_date = datetime.now(timezone.utc) + timedelta(days=30)
+        config.set(f"tokens.{token_key}.expires_at", future_date.isoformat())
 
         with patch("gh_pr.auth.token.Github") as mock_github_class:
             mock_github = Mock()
@@ -295,31 +336,115 @@ class TestTokenStorage:
             assert expiration["expired"] is False
             assert expiration["warning"] is False
 
+    def test_gh_cli_token_fallback_integration(self):
+        """Test that gh CLI token fallback works when no other token sources are available."""
+        with patch("subprocess.run") as mock_subprocess:
+            # Mock successful gh CLI auth status check
+            mock_subprocess.side_effect = [
+                # First call: gh auth status --show-token (succeeds)
+                Mock(
+                    returncode=0,
+                    stdout="Logged in to github.com as testuser (oauth_token)\nToken: ghp_FAKE_CLI_FALLBACK_TOKEN\n",
+                    stderr=""
+                ),
+                # Second call: gh auth token (fallback, also succeeds)
+                Mock(
+                    returncode=0,
+                    stdout="ghp_FAKE_CLI_FALLBACK_TOKEN\n",
+                    stderr=""
+                )
+            ]
+
+            # Ensure no environment variables interfere
+            env_vars_to_clear = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ACCESS_TOKEN']
+            with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=False):
+                # Create manager without explicit token (should fallback to gh CLI)
+                manager = TokenManager()
+
+                # Should successfully get token from gh CLI
+                token = manager.get_token()
+                assert token == "ghp_FAKE_CLI_FALLBACK_TOKEN"
+
+                # Verify both subprocess calls were made correctly
+                assert mock_subprocess.call_count == 2
+
+                # First call should be gh auth status --show-token
+                first_call = mock_subprocess.call_args_list[0]
+                assert first_call[0][0] == ["gh", "auth", "status", "--show-token"]
+                assert first_call[1]["capture_output"] is True
+                assert first_call[1]["text"] is True
+                assert first_call[1]["timeout"] == 10
+
+                # Second call should be gh auth token
+                second_call = mock_subprocess.call_args_list[1]
+                assert second_call[0][0] == ["gh", "auth", "token"]
+                assert second_call[1]["capture_output"] is True
+                assert second_call[1]["text"] is True
+                assert second_call[1]["timeout"] == 10
+
+    def test_gh_cli_token_fallback_failure_integration(self):
+        """Test behavior when gh CLI token fallback fails."""
+        import subprocess as subprocess_module
+
+        with patch("subprocess.run") as mock_subprocess:
+            # Mock gh CLI commands failing
+            mock_subprocess.side_effect = subprocess_module.SubprocessError("gh command failed")
+
+            # Ensure no environment variables provide tokens
+            env_vars_to_clear = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ACCESS_TOKEN']
+            with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=False):
+                # Create manager without explicit token
+                manager = TokenManager()
+
+                # Should return None when gh CLI fails
+                token = manager.get_token()
+                assert token is None
+
+                # Verify subprocess was attempted
+                assert mock_subprocess.call_count >= 1
+
 
 class TestCLITokenFeatures:
     """Integration tests for CLI token features."""
+
+    def _create_mock_github_with_user_and_rate_limit(self, username="testuser"):
+        """Create a mock GitHub instance with user and rate limit setup."""
+        mock_github = Mock()
+        mock_user = Mock()
+        mock_user.login = username
+        mock_github.get_user.return_value = mock_user
+
+        mock_rate_limit = Mock()
+        mock_rate_limit.core.limit = 5000
+        mock_rate_limit.core.remaining = 4999
+        mock_rate_limit.core.reset = datetime.now(timezone.utc)
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+
+        return mock_github
+
+    def _create_mock_pr_summary(self):
+        """Create a default mock PR summary."""
+        return {
+            "total_threads": 0,
+            "unresolved_active": 0,
+            "unresolved_outdated": 0,
+            "resolved_active": 0,
+            "resolved_outdated": 0,
+            "approvals": 0,
+            "changes_requested": 0,
+            "comments": 0,
+        }
 
     def test_verbose_mode_shows_token_info(self):
         """Test that verbose mode displays token information."""
         runner = CliRunner()
 
         with patch("gh_pr.auth.token.Github") as mock_github_class:
-            mock_github = Mock()
-            mock_user = Mock()
-            mock_user.login = "testuser"
-            mock_github.get_user.return_value = mock_user
-
-            mock_rate_limit = Mock()
-            mock_rate_limit.core.limit = 5000
-            mock_rate_limit.core.remaining = 4999
-            mock_rate_limit.core.reset = datetime.now(timezone.utc)
-            mock_github.get_rate_limit.return_value = mock_rate_limit
-
-            # Mock PR operations
+            mock_github = self._create_mock_github_with_user_and_rate_limit()
             mock_github.get_pull_request = Mock()
             mock_github_class.return_value = mock_github
 
-            with patch.dict(os.environ, {"GH_TOKEN": "ghp_test_token"}):  # noqa: S106
+            with patch.dict(os.environ, {"GH_TOKEN": "ghp_FAKE_TEST_TOKEN_VERBOSE"}):  # noqa: S106
                 with patch("gh_pr.core.pr_manager.PRManager.auto_detect_pr") as mock_auto:
                     mock_auto.return_value = "owner/repo#1"
                     with patch("gh_pr.core.pr_manager.PRManager.fetch_pr_data") as mock_fetch:
@@ -332,16 +457,7 @@ class TestCLITokenFeatures:
                         with patch("gh_pr.core.pr_manager.PRManager.fetch_pr_comments") as mock_comments:
                             mock_comments.return_value = []
                             with patch("gh_pr.core.pr_manager.PRManager.get_pr_summary") as mock_summary:
-                                mock_summary.return_value = {
-                                    "total_threads": 0,
-                                    "unresolved_active": 0,
-                                    "unresolved_outdated": 0,
-                                    "resolved_active": 0,
-                                    "resolved_outdated": 0,
-                                    "approvals": 0,
-                                    "changes_requested": 0,
-                                    "comments": 0,
-                                }
+                                mock_summary.return_value = self._create_mock_pr_summary()
 
                                 result = runner.invoke(main, ["--verbose"])
 

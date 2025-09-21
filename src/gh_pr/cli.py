@@ -141,12 +141,7 @@ def main(**kwargs) -> None:
         gh-pr --resolve-outdated     # Auto-resolve outdated comments
         gh-pr --accept-suggestions   # Accept all code suggestions
         gh-pr --copy                 # Copy output to clipboard
-<<<<<<< HEAD
         gh-pr --token-info           # Display detailed token information
-=======
-        gh-pr --review-report        # Generate a review report
-        gh-pr --batch-file prs.txt --resolve-outdated  # Batch resolve outdated comments
->>>>>>> origin/main
     """
     # Create config from kwargs
     cfg = CLIConfig(**kwargs)
@@ -592,7 +587,8 @@ def _handle_output(
         console.print(f"[green]✓ Generated review report: {report_file}[/green]")
 
     if copy:
-        clipboard = ClipboardManager()
+        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
+        clipboard = ClipboardManager(timeout=clipboard_timeout)
         plain_output = display_manager.generate_plain_output(pr_data, comments, summary)
         if clipboard.copy(plain_output):
             console.print("[green]✓ Copied to clipboard (plain text)[/green]")

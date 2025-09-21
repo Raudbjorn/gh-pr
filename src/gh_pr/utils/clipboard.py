@@ -8,9 +8,15 @@ from typing import Optional
 class ClipboardManager:
     """Manage clipboard operations."""
 
-    def __init__(self):
-        """Initialize ClipboardManager."""
+    def __init__(self, timeout: float = 5.0):
+        """
+        Initialize ClipboardManager.
+
+        Args:
+            timeout: Timeout in seconds for clipboard operations (default: 5.0)
+        """
         self.clipboard_cmd = self._detect_clipboard_command()
+        self.timeout = timeout
 
     def _detect_clipboard_command(self) -> Optional[list[str]]:
         """
@@ -73,8 +79,8 @@ class ClipboardManager:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            # Use timeout to prevent hanging
-            process.communicate(input=text.encode("utf-8"), timeout=5)
+            # Use configurable timeout to prevent hanging
+            process.communicate(input=text.encode("utf-8"), timeout=self.timeout)
             return process.returncode == 0
         except subprocess.TimeoutExpired:
             process.kill()

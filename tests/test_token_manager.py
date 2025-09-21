@@ -17,22 +17,22 @@ class TestTokenManagerInitialization:
 
     def test_init_with_provided_token(self):
         """Test initialization with explicitly provided token."""
-        token = "ghp_test_token_12345"  # noqa: S105
+        token = "ghp_FAKE_TOKEN_FOR_TESTING_ONLY"  # noqa: S105
         manager = TokenManager(token=token)
         assert manager.token == token
         assert manager._github is None
 
-    @patch.dict(os.environ, {"GH_TOKEN": "ghp_env_token"}, clear=True)  # noqa: S106
+    @patch.dict(os.environ, {"GH_TOKEN": "ghp_FAKE_ENV_TOKEN"}, clear=True)  # noqa: S106
     def test_init_with_gh_token_env(self):
         """Test token discovery from GH_TOKEN environment variable."""
         manager = TokenManager()
-        assert manager.token == "ghp_env_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_ENV_TOKEN"  # noqa: S105
 
-    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_github_env_token"}, clear=True)  # noqa: S106
+    @patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_FAKE_GITHUB_ENV_TOKEN"}, clear=True)  # noqa: S106
     def test_init_with_github_token_env(self):
         """Test token discovery from GITHUB_TOKEN environment variable."""
         manager = TokenManager()
-        assert manager.token == "ghp_github_env_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_GITHUB_ENV_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("subprocess.run")
@@ -40,21 +40,21 @@ class TestTokenManagerInitialization:
         """Test token discovery from gh CLI."""
         # Mock gh CLI response
         mock_result = Mock()
-        mock_result.stdout = "Token: ghp_cli_token_12345"  # noqa: S105
+        mock_result.stdout = "Token: ghp_FAKE_CLI_TOKEN"  # noqa: S105
         mock_result.returncode = 0
         mock_run.return_value = mock_result
 
         manager = TokenManager()
-        assert manager.token == "ghp_cli_token_12345"  # noqa: S105
+        assert manager.token == "ghp_FAKE_CLI_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     def test_init_with_config_token(self):
         """Test token discovery from configuration file."""
         config = ConfigManager()
-        config.set("github.token", "ghp_config_token")  # noqa: S105
+        config.set("github.token", "ghp_FAKE_CONFIG_TOKEN")  # noqa: S105
 
         manager = TokenManager(config_manager=config)
-        assert manager.token == "ghp_config_token"  # noqa: S105
+        assert manager.token == "ghp_FAKE_CONFIG_TOKEN"  # noqa: S105
 
     @patch.dict(os.environ, {}, clear=True)
     @patch("subprocess.run")
@@ -146,7 +146,7 @@ class TestTokenInfo:
         mock_github.get_rate_limit.return_value = mock_rate_limit
         mock_github_class.return_value = mock_github
 
-        manager = TokenManager(token="ghp_classic_token_12345")  # noqa: S106
+        manager = TokenManager(token="ghp_FAKE_TEST_TOKEN_REPLACED")  # noqa: S106
         info = manager.get_token_info()
 
         assert info is not None
@@ -466,7 +466,7 @@ class TestTokenMetadata:
         assert result is True
         # Token key is first 16 chars of SHA256 hash
         import hashlib
-        token_key = hashlib.sha256("ghp_classic_token".encode()).hexdigest()[:16]
+        token_key = hashlib.sha256("ghp_FAKE_TEST_TOKEN_REPLACED".encode()).hexdigest()[:16]
         stored_value = config.get(f"tokens.{token_key}")
         assert stored_value is not None
         assert stored_value.get("type") == "Classic Personal Access Token"
@@ -493,6 +493,6 @@ class TestGitHubClient:
 
     def test_get_token(self):
         """Test getting the current token."""
-        token = "ghp_test_token_12345"  # noqa: S105
+        token = "ghp_FAKE_TEST_TOKEN_REPLACED"  # noqa: S105
         manager = TokenManager(token=token)
         assert manager.get_token() == token
