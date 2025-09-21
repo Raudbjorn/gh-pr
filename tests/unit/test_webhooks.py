@@ -133,8 +133,8 @@ class TestWebhookHandler(unittest.TestCase):
         mock_handler = AsyncMock(return_value={'status': 'ok'})
         event = WebhookEvent(
             type=EventType.PULL_REQUEST,
-            action='opened',
-            payload={'test': 'data'}
+            delivery_id='test-456',
+            payload={'action': 'opened', 'test': 'data'}
         )
 
         self.handler.register_handler(EventType.PULL_REQUEST, mock_handler)
