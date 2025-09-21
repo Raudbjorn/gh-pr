@@ -16,14 +16,16 @@ Features:
 - Security features (masking sensitive environment variables)
 """
 
+import inspect
 import logging
 import logging.handlers
 import os
+import re
 import sys
 import threading
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -39,7 +41,6 @@ install_rich_traceback(show_locals=True)
 # Configuration constants
 DEFAULT_TIMEZONE = pytz.timezone('Atlantic/Reykjavik')
 DEFAULT_LOG_LEVEL = logging.INFO
-SUBPROCESS_TIMEOUT = 5  # seconds
 MAX_LOG_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 BACKUP_COUNT = 5
 
@@ -82,6 +83,8 @@ class RichLogger:
         self.name = name
         self.timezone = timezone
         self.session_id = SESSION_ID
+        self.console_output = console_output
+        self.file_output = file_output
 
         # Create logger
         self.logger = logging.getLogger(name)
@@ -138,15 +141,41 @@ class RichLogger:
             f"SID:{self.session_id[:8]} | %(message)s"
         )
 
-        formatter = logging.Formatter(file_format)
-        formatter.converter = lambda *args: datetime.now(self.timezone).timetuple()
+        class TimezoneAwareFormatter(logging.Formatter):
+            def __init__(self, fmt=None, datefmt=None, style='%', tz=None):
+                super().__init__(fmt, datefmt, style)
+                self.tz = tz
+
+            def formatTime(self, record, datefmt=None):
+                dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+                if self.tz:
+                    dt = dt.astimezone(self.tz)
+                if datefmt:
+                    s = dt.strftime(datefmt)
+                else:
+                    s = dt.isoformat()
+                return s
+
+        formatter = TimezoneAwareFormatter(file_format, tz=self.timezone)
         file_handler.setFormatter(formatter)
 
         self.logger.addHandler(file_handler)
 
     def _get_caller_info(self) -> Dict[str, Any]:
         """Get information about the calling function."""
-        frame = sys._getframe(3)  # Go up the stack to the actual caller
+        # Walk the stack to find first frame outside of logging module
+        current_file = inspect.getfile(inspect.currentframe())
+        for frame_info in inspect.stack()[1:]:
+            frame_file = frame_info.filename
+            if frame_file != current_file and not frame_file.endswith('logging/__init__.py'):
+                return {
+                    'filename': os.path.basename(frame_info.filename),
+                    'function': frame_info.function,
+                    'lineno': frame_info.lineno,
+                    'module': inspect.getmodulename(frame_info.filename) or 'unknown'
+                }
+        # Fallback if we can't find a proper frame
+        frame = sys._getframe(3)
         return {
             'filename': os.path.basename(frame.f_code.co_filename),
             'function': frame.f_code.co_name,
@@ -170,13 +199,26 @@ class RichLogger:
         ]
 
         masked_text = text
-        for var in os.environ:
+        for var, value in os.environ.items():
             if any(pattern in var.upper() for pattern in sensitive_patterns):
-                value = os.environ[var]
                 if value and len(value) > 4:
-                    # Show first 4 chars and mask the rest
+                    # Use word boundaries for more precise replacement
+                    # Also mask environment variable assignments like VAR=value
+                    escaped_value = re.escape(value)
                     masked_value = value[:4] + '*' * (len(value) - 4)
-                    masked_text = masked_text.replace(value, masked_value)
+
+                    # Replace value when it appears standalone or in assignments
+                    patterns = [
+                        rf'\b{escaped_value}\b',  # Word boundaries
+                        rf'({re.escape(var)}=){escaped_value}'  # VAR=value pattern
+                    ]
+
+                    for pattern in patterns:
+                        if '=' in pattern:
+                            # For assignment patterns, preserve the VAR= part
+                            masked_text = re.sub(pattern, rf'\1{masked_value}', masked_text)
+                        else:
+                            masked_text = re.sub(pattern, masked_value, masked_text)
 
         return masked_text
 
@@ -216,29 +258,28 @@ class RichLogger:
         self.logger.critical(self._format_message(message, **kwargs))
 
     def exception(self, message: str, **kwargs) -> None:
-        """Log exception with full traceback."""
-        exc_info = sys.exc_info()
-        if exc_info[0] is not None:
-            # Format the exception with rich traceback
-            tb_lines = traceback.format_exception(*exc_info)
-            tb_str = ''.join(tb_lines)
-            full_message = f"{message}\n{tb_str}"
-        else:
-            full_message = message
+        """Log exception with full traceback.
 
-        self.logger.error(self._format_message(full_message, **kwargs))
+        This method should be called from within an exception handler to capture
+        the current exception context. The rich handler will format the traceback.
+        """
+        # Let the rich handler format the exception with its superior formatting
+        self.logger.error(self._format_message(message, **kwargs), exc_info=True)
 
     def get_child(self, suffix: str) -> 'RichLogger':
-        """Create a child logger with the same configuration."""
+        """
+        Create a child logger with the same configuration.
+
+        The child logger inherits output settings from the parent logger.
+        """
         child_name = f"{self.name}.{suffix}"
-        child_logger = RichLogger(
+        return RichLogger(
             name=child_name,
             level=self.logger.level,
             timezone=self.timezone,
-            console_output=False,  # Inherit from parent
-            file_output=False      # Inherit from parent
+            console_output=self.console_output,
+            file_output=self.file_output
         )
-        return child_logger
 
 
 def traced(logger: Optional[RichLogger] = None):
@@ -271,21 +312,22 @@ def traced(logger: Optional[RichLogger] = None):
                 log.debug(f"EXIT {func.__name__}() -> {type(result).__name__}")
                 return result
             except Exception as e:
-                log.error(f"EXCEPTION {func.__name__}() -> {e.__class__.__name__}: {e}")
+                log.exception(f"EXCEPTION in {func.__name__}()")
                 raise
 
         return wrapper
     return decorator
 
 
-# Global logger registry
+# Global logger registry with thread safety
 _loggers: Dict[str, RichLogger] = {}
 _default_logger: Optional[RichLogger] = None
+_logger_lock = threading.Lock()
 
 
 def get_logger(name: str = "gh-pr", **kwargs) -> RichLogger:
     """
-    Get or create a logger instance.
+    Get or create a logger instance (thread-safe).
 
     Args:
         name: Logger name
@@ -296,14 +338,21 @@ def get_logger(name: str = "gh-pr", **kwargs) -> RichLogger:
     """
     global _loggers, _default_logger
 
-    if name not in _loggers:
-        _loggers[name] = RichLogger(name, **kwargs)
+    # Fast path: return existing logger without lock
+    if name in _loggers:
+        return _loggers[name]
 
-    # Set as default if it's the main logger
-    if name == "gh-pr" and _default_logger is None:
-        _default_logger = _loggers[name]
+    # Slow path: create new logger with lock
+    with _logger_lock:
+        # Double-check pattern
+        if name not in _loggers:
+            _loggers[name] = RichLogger(name, **kwargs)
 
-    return _loggers[name]
+        # Set as default if it's the main logger
+        if name == "gh-pr" and _default_logger is None:
+            _default_logger = _loggers[name]
+
+        return _loggers[name]
 
 
 def get_default_logger() -> RichLogger:
@@ -318,7 +367,8 @@ def setup_logging(
     level: int = DEFAULT_LOG_LEVEL,
     log_file: Optional[Union[str, Path]] = None,
     console_output: bool = True,
-    file_output: bool = True
+    file_output: bool = True,
+    timezone: Optional[pytz.BaseTzInfo] = None
 ) -> RichLogger:
     """
     Setup application-wide logging configuration.
@@ -337,7 +387,8 @@ def setup_logging(
         level=level,
         log_file=log_file,
         console_output=console_output,
-        file_output=file_output
+        file_output=file_output,
+        timezone=timezone or DEFAULT_TIMEZONE
     )
 
 
@@ -368,5 +419,10 @@ def critical(message: str, **kwargs) -> None:
 
 
 def exception(message: str, **kwargs) -> None:
-    """Quick exception logging."""
+    """
+    Quick exception logging.
+
+    Note: This should be called from within an exception handler
+    to properly capture the exception context.
+    """
     get_default_logger().exception(message, **kwargs)

@@ -232,7 +232,7 @@ def main(**kwargs) -> None:
         console.print("\n[yellow]Interrupted by user[/yellow]")
         sys.exit(130)
     except Exception as e:
-        logger.exception("Unexpected error occurred", error=str(e))
+        logger.exception("Unexpected error occurred")
         console.print(f"[red]Error: {e}[/red]")
         if cfg.verbose:
             console.print_exception()

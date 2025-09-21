@@ -325,10 +325,19 @@ class ConfigManager:
         }
         level = level_map.get(log_config["level"].upper(), logging.INFO)
 
+        # Get timezone configuration
+        import pytz
+        timezone_str = log_config.get("timezone", "Atlantic/Reykjavik")
+        try:
+            timezone_obj = pytz.timezone(timezone_str)
+        except pytz.exceptions.UnknownTimeZoneError:
+            timezone_obj = pytz.timezone("Atlantic/Reykjavik")  # Fallback to default
+
         # Setup logging with configuration
         setup_logging(
             level=level,
             log_file=log_config.get("log_file"),
             console_output=log_config.get("console_output", True),
-            file_output=log_config.get("file_output", True)
+            file_output=log_config.get("file_output", True),
+            timezone=timezone_obj
         )

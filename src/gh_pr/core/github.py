@@ -88,7 +88,7 @@ class GitHubClient:
             logger.debug("Pull request fetched successfully",
                         repo=f"{owner}/{repo}",
                         pr_number=pr_number,
-                        pr_title=pr.title[:50] + "..." if len(pr.title) > 50 else pr.title)
+                        pr_title=f"{pr.title[:50]}..." if len(pr.title) > 50 else pr.title)
             return pr
         except GithubException as e:
             logger.error("Failed to fetch pull request",
