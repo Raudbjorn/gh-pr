@@ -240,7 +240,8 @@ def main(**kwargs) -> None:
             console.print(f"[green]Enhanced CSV exported to: {export_path}[/green]")
 
         # Handle output
-        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy)
+        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
+        _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy, clipboard_timeout)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
@@ -668,7 +669,8 @@ def _handle_output(
     comments: list,
     summary: dict,
     export: Optional[str],
-    copy: bool
+    copy: bool,
+    clipboard_timeout: float = 5.0
 ):
     """Handle export and clipboard operations."""
     if export:
@@ -678,7 +680,6 @@ def _handle_output(
         console.print(f"[green]✓ Exported to {output_file}[/green]")
 
     if copy:
-        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
         clipboard = ClipboardManager(timeout=clipboard_timeout)
         plain_output = display_manager.generate_plain_output(pr_data, comments, summary)
         if clipboard.copy(plain_output):

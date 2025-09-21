@@ -92,7 +92,7 @@ def main():
         "test_type",
         nargs="?",
         default="all",
-        choices=["all", "unit", "integration", "phase4"],
+        choices=["all", "unit", "integration", "phase4", "phase5"],
         help="Type of tests to run (default: all)"
     )
 

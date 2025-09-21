@@ -14,7 +14,7 @@ from pathlib import Path
 from gh_pr.utils.notifications import NotificationManager, NotificationConfig
 
 
-class TestNotificationManager(unittest.TestCase):
+class TestNotificationManager(unittest.IsolatedAsyncioTestCase):
     """Test notification manager functionality."""
 
     def setUp(self):
@@ -29,10 +29,14 @@ class TestNotificationManager(unittest.TestCase):
         self.manager = NotificationManager(self.config)
 
     @patch('sys.platform', 'darwin')
-    @patch('subprocess.run')
-    async def test_notify_macos(self, mock_run):
+    @patch('asyncio.create_subprocess_exec')
+    async def test_notify_macos(self, mock_subprocess):
         """Test macOS notification."""
-        mock_run.return_value = Mock(returncode=0)
+        # Mock the async subprocess process
+        mock_process = AsyncMock()
+        mock_process.communicate.return_value = (b'', b'')
+        mock_process.returncode = 0
+        mock_subprocess.return_value = mock_process
 
         # Disable plyer for this test
         self.manager._use_plyer = False
@@ -45,10 +49,10 @@ class TestNotificationManager(unittest.TestCase):
         )
 
         self.assertTrue(result)
-        mock_run.assert_called_once()
+        mock_subprocess.assert_called_once()
 
         # Check osascript command was called
-        call_args = mock_run.call_args[0][0]
+        call_args = mock_subprocess.call_args[0]
         self.assertEqual(call_args[0], 'osascript')
         self.assertEqual(call_args[1], '-e')
         self.assertIn('Test Title', call_args[2])
@@ -89,16 +93,20 @@ class TestNotificationManager(unittest.TestCase):
         self.manager._use_plyer = False
         self.manager._platform = 'win32'
 
-        with patch.object(self.manager, '_notify_terminal') as mock_terminal:
-            mock_terminal.return_value = True
+        # Mock _notify_windows to raise an exception to trigger fallback
+        with patch.object(self.manager, '_notify_windows') as mock_windows:
+            mock_windows.side_effect = Exception("No Windows notification support")
 
-            result = await self.manager.notify(
-                "Test Title",
-                "Test Message"
-            )
+            with patch.object(self.manager, '_notify_terminal') as mock_terminal:
+                mock_terminal.return_value = True
 
-            self.assertTrue(result)
-            mock_terminal.assert_called_once_with("Test Title", "Test Message")
+                result = await self.manager.notify(
+                    "Test Title",
+                    "Test Message"
+                )
+
+                self.assertTrue(result)
+                mock_terminal.assert_called_once_with("Test Title", "Test Message")
 
     def test_notify_with_plyer(self):
         """Test notification using plyer library."""
@@ -163,10 +171,14 @@ class TestNotificationManager(unittest.TestCase):
         self.assertTrue(hasattr(panel_arg, 'title') or hasattr(panel_arg, 'renderable'))
 
     @patch('sys.platform', 'darwin')
-    @patch('subprocess.run')
-    async def test_notify_with_sound(self, mock_run):
+    @patch('asyncio.create_subprocess_exec')
+    async def test_notify_with_sound(self, mock_subprocess):
         """Test notification with sound on macOS."""
-        mock_run.return_value = Mock(returncode=0)
+        # Mock the async subprocess process
+        mock_process = AsyncMock()
+        mock_process.communicate.return_value = (b'', b'')
+        mock_process.returncode = 0
+        mock_subprocess.return_value = mock_process
 
         self.manager._use_plyer = False
         self.manager._platform = 'darwin'
@@ -180,7 +192,7 @@ class TestNotificationManager(unittest.TestCase):
         self.assertTrue(result)
 
         # Check sound was included in AppleScript
-        call_args = mock_run.call_args[0][0]
+        call_args = mock_subprocess.call_args[0]
         script = call_args[2]
         self.assertIn('sound name', script)
 
@@ -192,8 +204,10 @@ class TestNotificationManager(unittest.TestCase):
         mock_which.return_value = '/usr/bin/notify-send'
         mock_run.return_value = Mock(returncode=0)
 
-        # Set up icon path
-        icon_path = Path("/tmp/test_icon.png")
+        # Set up icon path using tempfile for security
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_icon:
+            icon_path = Path(tmp_icon.name)
         self.manager.config.icon_path = icon_path
 
         self.manager._use_plyer = False
@@ -213,6 +227,12 @@ class TestNotificationManager(unittest.TestCase):
         call_args = mock_run.call_args[0][0]
         self.assertIn('-i', call_args)
         self.assertIn(str(icon_path), call_args)
+
+        # Clean up temp file
+        try:
+            icon_path.unlink()
+        except FileNotFoundError:
+            pass
 
     @patch('sys.platform', 'unsupported')
     def test_unsupported_platform(self):

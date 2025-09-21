@@ -28,7 +28,7 @@ class GitHubClient:
         # Store token privately to avoid accidental exposure
         self._token = token
         auth = Auth.Token(token)
-        self.github = Github(auth=auth)
+        self.github = Github(auth=auth, timeout=timeout)
         self._user = None
         self.timeout = timeout
 

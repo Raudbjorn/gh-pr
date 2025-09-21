@@ -107,6 +107,20 @@ class MultiRepoManager:
         if config_path and config_path.exists():
             self._load_config(config_path)
 
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup resources."""
+        self.close()
+
+    def close(self):
+        """Close and cleanup resources."""
+        if hasattr(self, '_executor') and self._executor:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
     def _load_config(self, config_path: Path) -> None:
         """
         Load multi-repo configuration from file.
@@ -351,30 +365,39 @@ class MultiRepoManager:
         full_query = f"{query} is:pr {' '.join(repo_query_parts)}"
 
         try:
-            # Use GitHub search API
-            issues = self.github_client.github.search_issues(
-                query=full_query,
-                sort='updated',
-                order='desc'
-            )
+            # Run search in executor to avoid blocking the event loop
+            loop = asyncio.get_running_loop()
 
-            for issue in issues[:50]:  # Limit results
-                # Convert to PR
-                if issue.pull_request:
-                    # Find repo config
-                    repo_name = issue.repository.full_name
-                    repo_config = self._repos.get(repo_name)
+            def _search_and_process():
+                # Use GitHub search API
+                issues = self.github_client.github.search_issues(
+                    query=full_query,
+                    sort='updated',
+                    order='desc'
+                )
 
-                    if repo_config:
-                        # Create CrossRepoPR with reference detection
-                        cross_pr = CrossRepoPR(
-                            pr=issue.as_pull_request(),
-                            repo=repo_config
-                        )
+                search_results = []
+                for issue in issues[:50]:  # Limit results before conversion
+                    # Convert to PR
+                    if issue.pull_request:
+                        # Find repo config
+                        repo_name = issue.repository.full_name
+                        repo_config = self._repos.get(repo_name)
 
-                        # Detect cross-references
-                        self._detect_cross_references(cross_pr)
-                        results.append(cross_pr)
+                        if repo_config:
+                            # Create CrossRepoPR with reference detection
+                            cross_pr = CrossRepoPR(
+                                pr=issue.as_pull_request(),
+                                repo=repo_config
+                            )
+
+                            # Detect cross-references
+                            self._detect_cross_references(cross_pr)
+                            search_results.append(cross_pr)
+
+                return search_results
+
+            results = await loop.run_in_executor(self._executor, _search_and_process)
 
         except Exception:
             logger.exception("Search error")
