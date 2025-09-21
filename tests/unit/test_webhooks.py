@@ -18,7 +18,7 @@ from gh_pr.webhooks.handlers import WebhookHandler
 from gh_pr.webhooks.events import WebhookEvent, EventType
 
 
-class TestWebhookServer(unittest.TestCase):
+class TestWebhookServer(unittest.IsolatedAsyncioTestCase):
     """Test webhook server functionality."""
 
     def setUp(self):
@@ -31,7 +31,6 @@ class TestWebhookServer(unittest.TestCase):
 
         self.handler = Mock()
         self.server = WebhookServer(self.config, self.handler)
-
     def test_verify_signature_valid(self):
         """Test signature verification with valid signature."""
         payload = b'{"test": "data"}'
