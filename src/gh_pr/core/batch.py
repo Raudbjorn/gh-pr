@@ -5,11 +5,12 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple, Callable
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .pr_manager import PRManager
+from rich.progress import Progress
+
 from ..auth.permissions import PermissionChecker
+from .pr_manager import PRManager
 
 logger = logging.getLogger(__name__)
 

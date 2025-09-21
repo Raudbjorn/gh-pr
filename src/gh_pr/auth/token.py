@@ -161,7 +161,11 @@ class TokenManager:
             user = github.get_user()
             _ = user.login  # Force API call
             return True
-        except (GithubException, Exception):
+        except GithubException as e:
+            logger.debug(f"Token validation failed (GitHub): {e}")
+            return False
+        except Exception as e:
+            logger.debug(f"Token validation failed (unexpected): {e}")
             return False
 
     def get_token_info(self) -> Optional[dict[str, Any]]:
@@ -222,6 +226,11 @@ class TokenManager:
             if token_type == "Fine-grained Personal Access Token" and self.config_manager:
                     token_key = self._get_token_key()
                     stored_expiry = self.config_manager.get(f"tokens.{token_key}.expires_at")
+                    if not stored_expiry:
+                        # legacy key fallback (best-effort; remove when no longer needed)
+                        legacy = self.config_manager.get("tokens.github_pat.expires_at")
+                        if legacy:
+                            stored_expiry = legacy
                     if stored_expiry:
                         info["expires_at"] = stored_expiry
                         # Handle Z suffix in ISO format (replace with +00:00 for fromisoformat compatibility)
@@ -391,8 +400,9 @@ class TokenManager:
             # Store token metadata using consistent token key
             token_key = self._get_token_key()
 
+            info = self.get_token_info() or {}
             metadata = {
-                "type": self.get_token_info().get("type", "Unknown"),
+                "type": info.get("type", "Unknown"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -401,6 +411,6 @@ class TokenManager:
 
             self.config_manager.set(f"tokens.{token_key}", metadata)
             return True
-        except Exception as e:
+        except (KeyError, AttributeError, ValueError) as e:
             logger.debug(f"Failed to store token metadata: {e}")
             return False

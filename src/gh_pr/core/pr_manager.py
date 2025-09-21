@@ -18,6 +18,7 @@ from .graphql import GraphQLClient
 logger = logging.getLogger(__name__)
 
 
+
 class PRManager:
     """Manages PR operations and business logic."""
 

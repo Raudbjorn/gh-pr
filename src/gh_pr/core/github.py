@@ -90,11 +90,13 @@ class GitHubClient:
         Args:
             owner: Repository owner
             repo: Repository name
-            limit: Maximum number of PRs to return
+            limit: Maximum number of PRs to return (clamped to 1-100)
 
         Returns:
             List of PR dictionaries
         """
+        # Clamp limit to GitHub API bounds
+        limit = max(1, min(limit, 100))
         repository = self.get_repository(owner, repo)
         prs = []
 
