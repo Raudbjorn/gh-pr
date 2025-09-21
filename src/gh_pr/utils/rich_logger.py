@@ -249,14 +249,18 @@ class RichLogger:
         self.logger.error(self._format_message(full_message, **kwargs))
 
     def get_child(self, suffix: str) -> 'RichLogger':
-        """Create a child logger with the same configuration."""
+        """
+        Create a child logger with the same configuration.
+
+        The child logger inherits output settings (console_output, file_output) from the parent.
+        """
         child_name = f"{self.name}.{suffix}"
         child_logger = RichLogger(
             name=child_name,
             level=self.logger.level,
             timezone=self.timezone,
-            console_output=False,  # Inherit from parent
-            file_output=False      # Inherit from parent
+            console_output=self.console_output,
+            file_output=self.file_output
         )
         return child_logger
 
