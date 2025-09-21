@@ -21,7 +21,7 @@ class TestPRDisplay(unittest.TestCase):
         """Set up test fixtures."""
         # Create a Console that writes to a capture buffer
         self.output_buffer = io.StringIO()
-        self.console = Console(file=self.output_buffer, force_terminal=True, width=120)
+        self.console = Console(file=self.output_buffer, force_terminal=True, width=120, record=True)
         self.display = PRDisplay(self.console)
 
     def test_display_pr_header(self):
