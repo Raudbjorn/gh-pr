@@ -219,20 +219,23 @@ class PluginLoader:
         base_classes = {Plugin, PREventPlugin, NotificationPlugin,
                        CommentFilterPlugin, DisplayFormatterPlugin}
 
-        plugin_class = None
+        candidates = []
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
-            if (isinstance(attr, type) and
-                issubclass(attr, Plugin) and
-                attr not in base_classes):
-                plugin_class = attr
-                break
+            if isinstance(attr, type) and issubclass(attr, Plugin) and attr not in base_classes:
+                candidates.append(attr)
 
-        if not plugin_class:
+        if not candidates:
             raise ValueError(f"No Plugin subclass found in {path}")
+        if len(candidates) > 1:
+            raise ValueError(f"Multiple Plugin subclasses found in {path}: {[c.__name__ for c in candidates]}")
 
-        # Instantiate plugin
-        return plugin_class(self.context)
+        # Instantiate and validate metadata
+        plugin = candidates[0](self.context)
+        metadata = plugin.get_metadata()
+        if not metadata or not metadata.validate():
+            raise ValueError(f"Invalid plugin metadata for {getattr(metadata, 'name', '<unknown>')}")
+        return plugin
 
     def _load_plugin_directory(self, name: str, path: Path) -> Optional[Plugin]:
         """
