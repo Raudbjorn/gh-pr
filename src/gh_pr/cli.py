@@ -159,13 +159,11 @@ def main(**kwargs) -> None:
         return
 
     try:
-        # Initialize services
-        result = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
+        # Initialize all core services
+        result = _initialize_core_services(cfg)
         if result is None:
             return  # Cache was cleared
-        config_manager, cache_manager, token_manager = result
+        config_manager, cache_manager, token_manager, github_client, pr_manager = result
 
         # Handle --token-info flag
         if cfg.token_info:
@@ -179,10 +177,7 @@ def main(**kwargs) -> None:
         # Check automation permissions
         _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
 
-        # Initialize clients and managers
-        token = token_manager.get_token()
-        github_client = GitHubClient(token)
-        pr_manager = PRManager(github_client, cache_manager, token)
+        # Initialize display manager
         display_manager = DisplayManager(console, verbose=cfg.verbose)
 
         # Handle batch operations
@@ -268,6 +263,33 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
         sys.exit(1)
 
     return config_manager, cache_manager, token_manager
+
+
+def _initialize_core_services(cfg: CLIConfig):
+    """Initialize all core services including GitHub client and PR manager.
+
+    Args:
+        cfg: CLI configuration object
+
+    Returns:
+        Tuple of initialized services or None if cache was cleared
+    """
+    result = _initialize_services(
+        cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
+    )
+    if result is None:
+        return None  # Cache was cleared
+
+    config_manager, cache_manager, token_manager = result
+
+    # Initialize GitHub client
+    github_client = GitHubClient(token_manager.get_token())
+
+    # Initialize PR Manager
+    from .core.pr_manager import PRManager
+    pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
+
+    return config_manager, cache_manager, token_manager, github_client, pr_manager
 
 
 def _display_token_info(token_manager: TokenManager, verbose: bool):
@@ -613,20 +635,11 @@ def _launch_tui(cfg: CLIConfig) -> None:
     try:
         from .ui.interactive import GhPrTUI
 
-        # Initialize services
-        result = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
+        # Initialize all core services
+        result = _initialize_core_services(cfg)
         if result is None:
             return  # Cache was cleared
-        config_manager, cache_manager, token_manager = result
-
-        # Initialize GitHub client
-        github_client = GitHubClient(token_manager.get_token())
-
-        # Initialize PR Manager
-        from .core.pr_manager import PRManager
-        pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
+        config_manager, cache_manager, token_manager, github_client, pr_manager = result
 
         # Launch the TUI
         app = GhPrTUI(

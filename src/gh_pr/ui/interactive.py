@@ -305,6 +305,8 @@ class SearchBar(Widget):
 class GhPrTUI(App):
     """Main TUI application for gh-pr."""
 
+    DEFAULT_PR_LIMIT = 50
+
     CSS = """
     Screen {
         layout: grid;
@@ -356,6 +358,7 @@ class GhPrTUI(App):
         pr_manager: PRManager,
         config_manager: ConfigManager,
         initial_repo: Optional[str] = None,
+        pr_limit: int = None,
     ):
         """Initialize the TUI application.
 
@@ -364,12 +367,14 @@ class GhPrTUI(App):
             pr_manager: PR manager instance
             config_manager: Configuration manager
             initial_repo: Initial repository to load
+            pr_limit: Maximum number of PRs to load (default: 50)
         """
         super().__init__()
         self.github_client = github_client
         self.pr_manager = pr_manager
         self.config_manager = config_manager
         self.initial_repo = initial_repo
+        self.pr_limit = pr_limit or self.DEFAULT_PR_LIMIT
 
         # Initialize theme manager
         self.theme_manager = ThemeManager()
@@ -388,11 +393,20 @@ class GhPrTUI(App):
         self._search_task = None
         self._search_debounce_handle = None
 
-    def on_mount(self) -> None:
-        """Called when the widget is mounted."""
-        super().on_mount()
+    async def on_mount(self) -> None:
+        """Handle mount event - load initial data and apply theme."""
+        await super().on_mount()
+
         # Apply theme to console
         self.console.push_theme(self.theme_manager.get_rich_theme())
+
+        # Set window title and subtitle
+        self.title = "GitHub PR Review - Interactive Mode"
+        self.sub_title = f"Repository: {self.current_repo or 'Not selected'}"
+
+        # Load initial PRs if repo is specified
+        if self.current_repo:
+            await self.load_prs()
 
     def compose(self) -> ComposeResult:
         """Compose the TUI layout."""
@@ -433,13 +447,6 @@ class GhPrTUI(App):
 
         yield Footer()
 
-    async def on_mount(self) -> None:
-        """Handle mount event - load initial data."""
-        self.title = "GitHub PR Review - Interactive Mode"
-        self.sub_title = f"Repository: {self.current_repo or 'Not selected'}"
-
-        if self.current_repo:
-            await self.load_prs()
 
     async def load_prs(self) -> None:
         """Load PRs for the current repository."""
@@ -454,9 +461,8 @@ class GhPrTUI(App):
                 return
 
             # Load PRs with configured limit
-            pr_limit = self.config_manager.get("github.pr_limit", 50)
             self.prs = await asyncio.to_thread(
-                self.github_client.get_open_prs, owner, repo, limit=pr_limit
+                self.github_client.get_open_prs, owner, repo, limit=self.pr_limit
             )
 
             # Update list
@@ -647,6 +653,27 @@ class GhPrTUI(App):
         """
         self.notify(help_text, severity="information", timeout=10)
 
+    def action_open_browser(self) -> None:
+        """Open the current PR in a web browser."""
+        if not self.current_pr or not self.current_repo:
+            self.notify("No PR selected", severity="warning")
+            return
+
+        try:
+            # Parse owner and repo
+            owner, repo = self.current_repo.split("/", 1)
+            pr_number = self.current_pr["number"]
+
+            # Construct URL
+            url = f"https://github.com/{owner}/{repo}/pull/{pr_number}"
+
+            # Open in browser
+            import webbrowser
+            webbrowser.open(url)
+            self.notify(f"Opened PR #{pr_number} in browser", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to open browser: {str(e)}", severity="error")
+
     def action_copy_url(self) -> None:
         """Copy current PR URL to clipboard."""
         if self.current_pr and self.current_repo:
@@ -682,6 +709,8 @@ class GhPrTUI(App):
             self.toggle_export_menu()
         elif action == MenuAction.COPY:
             self.action_copy_url()
+        elif action == MenuAction.OPEN_BROWSER:
+            self.action_open_browser()
         elif action == MenuAction.SETTINGS:
             self.show_settings_menu()
         elif action == MenuAction.HELP:
@@ -708,7 +737,7 @@ class GhPrTUI(App):
         """Handle filter option change from FilterOptionsMenu."""
         self.filter_mode = filter_type
         if self.current_repo:
-            self.load_prs()
+            asyncio.create_task(self.load_prs())
 
     def handle_sort_change(self, sort_option: str) -> None:
         """Handle sort option change from SortOptionsMenu."""
@@ -727,7 +756,14 @@ class GhPrTUI(App):
         # Refresh the display
         self.update_pr_list()
 
-    def handle_export(self, export_format: str, filename: str = None) -> None:
+    def update_pr_list(self) -> None:
+        """Update the PR list display with current PRs."""
+        pr_list = self.query_one("#pr-list", ListView)
+        pr_list.clear()
+        for pr in self.prs:
+            pr_list.append(PRListItem(pr))
+
+    def handle_export(self, export_format: str, filename: Optional[str] = None) -> None:
         """Handle export request from ExportMenu."""
         if not self.current_pr or not self.current_comments:
             self.notify("No PR data to export", severity="warning")

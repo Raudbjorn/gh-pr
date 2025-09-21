@@ -164,9 +164,14 @@ class FilterOptionsMenu(Widget):
             super().__init__()
             self.filters = filters
 
-    def __init__(self):
-        """Initialize filter options menu."""
+    def __init__(self, on_filter_change: Optional[Callable[[str], None]] = None):
+        """Initialize filter options menu.
+
+        Args:
+            on_filter_change: Callback when filter is changed
+        """
         super().__init__()
+        self.on_filter_change = on_filter_change
 
         # Current filter state
         self.filters = {
@@ -251,6 +256,9 @@ class FilterOptionsMenu(Widget):
         """
         if event.button.id == "apply_filters":
             self.post_message(self.FilterChanged(self.filters.copy()))
+            if self.on_filter_change:
+                # For now, pass the status filter as the main filter type
+                self.on_filter_change(self.filters.get("status", "all"))
 
 
 class SortOptionsMenu(Widget):
@@ -290,9 +298,14 @@ class SortOptionsMenu(Widget):
             self.sort_by = sort_by
             self.ascending = ascending
 
-    def __init__(self):
-        """Initialize sort options menu."""
+    def __init__(self, on_sort_change: Optional[Callable[[str], None]] = None):
+        """Initialize sort options menu.
+
+        Args:
+            on_sort_change: Callback when sort is changed
+        """
         super().__init__()
+        self.on_sort_change = on_sort_change
         self.current_sort = "newest"
         self.ascending = True
 
@@ -341,6 +354,8 @@ class SortOptionsMenu(Widget):
         """
         if event.button.id == "apply_sort":
             self.post_message(self.SortChanged(self.current_sort, self.ascending))
+            if self.on_sort_change:
+                self.on_sort_change(self.current_sort)
 
 
 class ExportMenu(Widget):
@@ -377,9 +392,14 @@ class ExportMenu(Widget):
             self.format = format
             self.options = options
 
-    def __init__(self):
-        """Initialize export menu."""
+    def __init__(self, on_export: Optional[Callable[[str, Dict[str, Any]], None]] = None):
+        """Initialize export menu.
+
+        Args:
+            on_export: Callback when export is requested
+        """
         super().__init__()
+        self.on_export = on_export
         self.export_format = "markdown"
         self.options = {
             "include_code": True,
@@ -443,6 +463,8 @@ class ExportMenu(Widget):
         """
         if event.button.id == "export_button":
             self.post_message(self.ExportRequested(self.export_format, self.options.copy()))
+            if self.on_export:
+                self.on_export(self.export_format, self.options.copy())
 
 
 class KeyBindingsDisplay(Widget):
