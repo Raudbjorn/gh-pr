@@ -7,16 +7,17 @@ with dependency validation.
 
 import importlib
 import importlib.util
+import json
 import logging
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Set
-import json
+from typing import Dict, List, Optional
+
 import tomllib
 
-from .base import Plugin, PluginMetadata, PluginContext
+from .base import Plugin, PluginContext
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +108,8 @@ class PluginLoader:
                     if plugin_name:
                         discovered[plugin_name] = manifest_file.parent
                         logger.debug(f"Discovered plugin: {plugin_name} at {manifest_file.parent}")
-                except Exception as e:
-                    logger.warning(f"Failed to read manifest {manifest_file}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to read manifest {manifest_file}")
 
             # Also check for JSON manifests
             for manifest_file in plugin_dir.glob('*/plugin.json'):
@@ -120,8 +121,8 @@ class PluginLoader:
                     if plugin_name:
                         discovered[plugin_name] = manifest_file.parent
                         logger.debug(f"Discovered plugin: {plugin_name} at {manifest_file.parent}")
-                except Exception as e:
-                    logger.warning(f"Failed to read manifest {manifest_file}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to read JSON manifest {manifest_file}")
 
             # Look for Python plugin modules
             for py_file in plugin_dir.glob('*.py'):
@@ -157,7 +158,8 @@ class PluginLoader:
                 # Load plugin from directory
                 plugin = self._load_plugin_directory(name, path)
             else:
-                raise ValueError(f"Invalid plugin path: {path}")
+                msg = f"Invalid plugin path: {path}"
+                raise ValueError(msg)
 
             if plugin:
                 self._loaded_plugins[name] = plugin
@@ -194,7 +196,8 @@ class PluginLoader:
             spec = importlib.util.spec_from_file_location(name, path)
 
         if not spec or not spec.loader:
-            raise ImportError(f"Cannot load module from {path}")
+            msg = f"Cannot load module from {path}"
+            raise ImportError(msg)
 
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
@@ -217,8 +220,13 @@ class PluginLoader:
 
         # Find Plugin subclass in module
         # Skip base plugin classes that may be imported
-        from .base import (Plugin, PREventPlugin, NotificationPlugin,
-                          CommentFilterPlugin, DisplayFormatterPlugin)
+        from .base import (
+            CommentFilterPlugin,
+            DisplayFormatterPlugin,
+            NotificationPlugin,
+            Plugin,
+            PREventPlugin,
+        )
         base_classes = {Plugin, PREventPlugin, NotificationPlugin,
                        CommentFilterPlugin, DisplayFormatterPlugin}
 
@@ -229,15 +237,18 @@ class PluginLoader:
                 candidates.append(attr)
 
         if not candidates:
-            raise ValueError(f"No Plugin subclass found in {path}")
+            msg = f"No Plugin subclass found in {path}"
+            raise ValueError(msg)
         if len(candidates) > 1:
-            raise ValueError(f"Multiple Plugin subclasses found in {path}: {[c.__name__ for c in candidates]}")
+            msg = f"Multiple Plugin subclasses found in {path}: {[c.__name__ for c in candidates]}"
+            raise ValueError(msg)
 
         # Instantiate and validate metadata
         plugin = candidates[0](self.context)
         metadata = plugin.get_metadata()
         if not metadata or not metadata.validate():
-            raise ValueError(f"Invalid plugin metadata for {getattr(metadata, 'name', '<unknown>')}")
+            msg = f"Invalid plugin metadata for {getattr(metadata, 'name', '<unknown>')}"
+            raise ValueError(msg)
         return plugin
 
     def _load_plugin_directory(self, name: str, path: Path) -> Optional[Plugin]:

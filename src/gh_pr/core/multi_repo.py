@@ -10,16 +10,14 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from github import Github
-from github.Repository import Repository
 from github.PullRequest import PullRequest
+from github.Repository import Repository
 
-from .github import GitHubClient
 from ..utils.cache import CacheManager
+from .github import GitHubClient
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +56,8 @@ class RepoConfig:
         """
         parts = repo_string.split('/')
         if len(parts) != 2:
-            raise ValueError(f"Invalid repository format: {repo_string}")
+            msg = f"Invalid repository format: {repo_string}"
+            raise ValueError(msg)
 
         return cls(owner=parts[0], name=parts[1])
 
@@ -137,8 +136,8 @@ class MultiRepoManager:
 
             logger.info(f"Loaded {len(self._repos)} repositories from config")
 
-        except Exception as e:
-            logger.error(f"Failed to load multi-repo config: {e}")
+        except Exception:
+            logger.exception("Failed to load multi-repo config")
 
     def add_repository(
         self,
@@ -264,8 +263,8 @@ class MultiRepoManager:
             try:
                 prs = await task
                 all_prs[repo_name] = prs
-            except Exception as e:
-                logger.error(f"Failed to fetch PRs for {repo_name}: {e}")
+            except Exception:
+                logger.exception(f"Failed to fetch PRs for {repo_name}")
                 all_prs[repo_name] = []
 
         # Cache results
@@ -316,8 +315,8 @@ class MultiRepoManager:
                 return list(paged[:repo.pr_limit])
 
             return await loop.run_in_executor(self._executor, _fetch)
-        except Exception as e:
-            logger.error(f"Error fetching PRs for {repo.full_name}: {e}")
+        except Exception:
+            logger.exception(f"Error fetching PRs for {repo.full_name}")
             return []
 
     async def search_prs(
@@ -377,8 +376,8 @@ class MultiRepoManager:
                         self._detect_cross_references(cross_pr)
                         results.append(cross_pr)
 
-        except Exception as e:
-            logger.error(f"Search error: {e}")
+        except Exception:
+            logger.exception("Search error")
 
         return results
 
@@ -486,8 +485,8 @@ class MultiRepoManager:
                         # Queue for traversal
                         queue.append(((related_repo, related_pr_num), depth + 1))
 
-            except Exception as e:
-                logger.error(f"Error processing {pr_key}: {e}")
+            except Exception:
+                logger.exception(f"Error processing {pr_key}")
 
         return graph
 
@@ -548,17 +547,17 @@ class MultiRepoManager:
                                 description=label.description or ""
                             )
                             created_labels.append(label.name)
-                        except Exception as e:
+                        except Exception:
                             # Label might already exist - log but continue
-                            logger.debug(f"Label {label.name} already exists or error: {e}")
+                            logger.exception(f"Label {label.name} creation failed")
 
                     results[target_repo_name] = created_labels
 
-                except Exception as e:
-                    logger.error(f"Failed to sync labels to {target_repo_name}: {e}")
+                except Exception:
+                    logger.exception(f"Failed to sync labels to {target_repo_name}")
                     results[target_repo_name] = []
 
-        except Exception as e:
-            logger.error(f"Failed to get source labels: {e}")
+        except Exception:
+            logger.exception("Failed to get source labels")
 
         return results

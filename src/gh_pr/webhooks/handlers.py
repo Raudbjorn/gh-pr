@@ -5,14 +5,15 @@ Provides base handler class and specific event processors
 for different GitHub webhook events.
 """
 
-import logging
-from typing import Dict, Any, List, Optional, Callable, Awaitable
-from abc import ABC, abstractmethod
 import asyncio
-from datetime import datetime, timedelta
+import logging
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
-from .events import WebhookEvent, EventType
 from ..utils.notifications import NotificationManager
+from .events import EventType, WebhookEvent
 
 logger = logging.getLogger(__name__)
 
@@ -121,9 +122,9 @@ class PREventHandler(EventHandler):
                         repo=repo_name
                     )
                     result['notification_sent'] = bool(ok)
-                except Exception as e:
+                except Exception:
                     logger.exception("Failed to send notification")
-                    result['notification_error'] = str(e)
+                    result['notification_error'] = "Notification failed"
         result['message'] = " ".join(message_parts) if message_parts else "No message generated"
         return result
 
@@ -287,9 +288,10 @@ class WebhookHandler:
                 try:
                     result = await handler(event)
                     results.append(result)
-                except Exception as e:
+                except Exception:
+                    logger.exception("Plugin handler failed")
                     # Return dict with error key for test compatibility
-                    results.append({'error': str(e)})
+                    results.append({'error': 'Plugin handler failed'})
 
         return results
 

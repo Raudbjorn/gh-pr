@@ -7,13 +7,12 @@ to terminal notifications if desktop support is unavailable.
 
 import asyncio
 import logging
-import os
-import sys
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
-from pathlib import Path
 import shutil
 import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +91,7 @@ class NotificationManager:
         subtitle: str = "",
         icon: Optional[str] = None,
         urgency: Optional[str] = None,
-        **kwargs
+        **kwargs  # noqa: ARG002
     ) -> bool:
         """
         Send a desktop notification.
@@ -167,11 +166,11 @@ class NotificationManager:
                 kwargs['app_icon'] = str(icon or self.config.icon_path)
 
             self._plyer.notify(**kwargs)
-            return True
-
-        except Exception as e:
-            logger.debug(f"Plyer notification failed: {e}")
+        except Exception:
+            logger.exception("Plyer notification failed")
             return False
+        else:
+            return True
 
     def _as_quote(self, s: str) -> str:
         # Escape backslashes and double quotes for AppleScript string literals
@@ -212,26 +211,24 @@ class NotificationManager:
 
             try:
                 # Wait for process with timeout
-                stdout, stderr = await asyncio.wait_for(
+                _stdout, _stderr = await asyncio.wait_for(
                     process.communicate(),
                     timeout=5.0
                 )
-
-                return process.returncode == 0
-
             except asyncio.TimeoutError:
                 # Timeout occurred, try to terminate the process gracefully
                 try:
                     process.terminate()
-                    await asyncio.wait_for(process.wait(), timeout=1.0)
-                except:
-                    # Force kill if termination fails
+                    await asyncio.wait_for(process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
                     process.kill()
-                logger.debug("macOS notification timed out")
+                    await process.wait()
                 return False
+            else:
+                return process.returncode == 0
 
-        except Exception as e:
-            logger.debug(f"macOS notification failed: {e}")
+        except Exception:
+            logger.exception("macOS notification failed")
             return False
     async def _notify_linux(
         self,
@@ -293,12 +290,11 @@ class NotificationManager:
                 text=True,
                 timeout=5
             )
-
-            return result.returncode == 0
-
-        except Exception as e:
-            logger.debug(f"Linux notification failed: {e}")
+        except Exception:
+            logger.exception("Linux notification failed")
             return False
+        else:
+            return result.returncode == 0
 
     async def _notify_windows(
         self,
@@ -328,8 +324,6 @@ class NotificationManager:
                 duration=self.config.timeout,
                 threaded=True
             )
-            return True
-
         except ImportError:
             logger.debug("win10toast not available")
 
@@ -343,11 +337,13 @@ class NotificationManager:
                     MessageBox(None, message, title, 0x40 | 0x1)
 
                 await asyncio.to_thread(show_messagebox)
-                return True
-
-            except Exception as e:
-                logger.debug(f"Windows notification failed: {e}")
+            except Exception:
+                logger.exception("Windows notification failed")
                 return False
+            else:
+                return True
+        else:
+            return True
 
     def _notify_terminal(self, title: str, message: str) -> bool:
         """

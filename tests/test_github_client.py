@@ -1,6 +1,5 @@
 """Unit tests for GitHubClient class."""
 
-import json
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
@@ -22,16 +21,16 @@ class TestGitHubClient:
             yield mock_instance
 
     @pytest.fixture
-    def client(self, mock_github):
+    def client(self, mock_github):  # noqa: ARG002
         """Create a GitHubClient instance with mocked PyGithub."""
         # Use the existing mock_github fixture without additional patching
         return GitHubClient("test_token")
 
     def test_init(self):
         """Test GitHubClient initialization."""
-        client = GitHubClient("test_token_123")
-        # Token should be stored privately
-        assert client._token == "test_token_123"
+        client = GitHubClient("test_token_123")  # noqa: S105
+        # Token should be stored and accessible via property
+        assert client.token == "test_token_123"
         assert client.github is not None
         assert client._user is None
 

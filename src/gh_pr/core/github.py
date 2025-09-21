@@ -367,6 +367,6 @@ class GitHubClient:
         """
         try:
             return self.user.login
-        except GithubException as e:
-            logger.error(f"Failed to get current user login: {e}")
+        except GithubException:
+            logger.exception("Failed to get current user login")
             return None

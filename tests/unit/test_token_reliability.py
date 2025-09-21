@@ -182,7 +182,7 @@ class TestTokenManagerReliability:
 
     def test_token_manager_with_provided_token(self):
         """Test TokenManager when token is provided directly."""
-        test_token = "ghp_provided_token_123456789"
+        test_token = "ghp_provided_token_123456789"  # noqa: S105
         token_manager = TokenManager(token=test_token)
 
         assert token_manager.get_token() == test_token
@@ -221,8 +221,8 @@ class TestTokenManagerReliability:
 
     def test_token_manager_token_precedence(self):
         """Test that token sources are checked in correct precedence order."""
-        provided_token = "ghp_provided_token"
-        env_token = "ghp_env_token"
+        provided_token = "ghp_provided_token"  # noqa: S105
+        env_token = "ghp_env_token"  # noqa: S105
 
         # Provided token should take precedence over environment
         with patch.dict('os.environ', {'GH_TOKEN': env_token}):
@@ -449,7 +449,7 @@ class TestTokenManagerEdgeCases:
 
     def test_token_with_special_characters(self):
         """Test handling of tokens with special characters."""
-        special_token = "ghp_token_with_!@#$%^&*()_+"
+        special_token = "ghp_token_with_!@#$%^&*()_+"  # noqa: S105
         token_manager = TokenManager(token=special_token)
         assert token_manager.get_token() == special_token
 

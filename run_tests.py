@@ -4,7 +4,6 @@
 import argparse
 import subprocess
 import sys
-from pathlib import Path
 
 
 def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, marker=None):
@@ -75,13 +74,14 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
         # No user input is passed directly to the shell (list form prevents injection)
         # Using list form (not string) with shell=False (default) prevents command injection
         result = subprocess.run(cmd, check=False)  # noqa: S603
-        return result.returncode
     except KeyboardInterrupt:
         print("\nTests interrupted by user")
         return 130
-    except Exception as e:
-        print(f"Error running tests: {e}")
+    except Exception:
+        print("Error running tests")
         return 1
+    else:
+        return result.returncode
 
 
 def main():
