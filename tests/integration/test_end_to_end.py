@@ -152,7 +152,7 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
             body="See org/repo1#123"
         )
 
-        self.mock_github._github.search_issues.return_value = [
+        self.mock_github.github.search_issues.return_value = [
             mock_issue1, mock_issue2
         ]
 

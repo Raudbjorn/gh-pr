@@ -107,6 +107,19 @@ class MultiRepoManager:
         if config_path and config_path.exists():
             self._load_config(config_path)
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        # Cancel pending work; don't block shutdown
+        self._executor.shutdown(wait=False, cancel_futures=True)
+
+    def close(self, wait: bool = False) -> None:
+        """Shut down internal executor."""
+        self._executor.shutdown(wait=wait, cancel_futures=not wait)
+        if config_path and config_path.exists():
+            self._load_config(config_path)
+
     def __enter__(self):
         """Context manager entry."""
         return self
@@ -478,8 +491,7 @@ class MultiRepoManager:
                     continue
 
                 repo_client = self._get_repo_client(repo_config)
-                pr = repo_client.get_pull(pr_num)
-
+                pr = await asyncio.to_thread(repo_client.get_pull, pr_num)
                 # Add node
                 graph['nodes'].append({
                     'id': pr_key,
