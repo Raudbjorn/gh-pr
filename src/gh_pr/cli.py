@@ -484,14 +484,10 @@ def _launch_tui(cfg: CLIConfig) -> None:
     try:
         from .ui.interactive import GhPrTUI
 
-        # Initialize services
-        result = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
-        if result is None:
-            return  # Cache was cleared
-        config_manager, cache_manager, token_manager = result
-
+    if clear_cache:
+        cache_manager.clear()
+        console.print("[green]✓ Cache cleared successfully[/green]")
+        return None
         # Initialize GitHub client
         github_client = GitHubClient(token_manager.get_token())
 
