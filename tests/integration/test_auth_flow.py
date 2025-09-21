@@ -94,7 +94,7 @@ class TestAuthenticationFlow(unittest.TestCase):
             # Mock gh CLI response
             mock_result = Mock()
             mock_result.returncode = 0
-            mock_result.stdout = "✓ github.com\n  ✓ Token: ghp_cli_token_123\n"
+            mock_result.stdout = "✓ github.com\n  ✓ Token: ghp_FAKE_TEST_TOKEN_REPLACED\n"
             mock_subprocess.return_value = mock_result
 
             # Mock GitHub API
@@ -106,7 +106,7 @@ class TestAuthenticationFlow(unittest.TestCase):
 
             # Initialize token manager
             token_manager = TokenManager()
-            self.assertEqual(token_manager.get_token(), "ghp_cli_token_123")
+            self.assertEqual(token_manager.get_token(), "ghp_FAKE_TEST_TOKEN_REPLACED")
 
             # Validate token works
             self.assertTrue(token_manager.validate_token())

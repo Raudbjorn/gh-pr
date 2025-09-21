@@ -118,6 +118,7 @@ class TestGitHubClient:
         mock_pr1.updated_at = datetime.now(timezone.utc)
         mock_pr1.labels = []  # Initialize labels as empty list
         mock_pr1.draft = False  # Initialize draft field
+        mock_pr1.mergeable = True  # Initialize mergeable field
 
         mock_pr2 = Mock()
         mock_pr2.number = 2
@@ -128,6 +129,7 @@ class TestGitHubClient:
         mock_pr2.updated_at = datetime.now(timezone.utc)
         mock_pr2.labels = []  # Initialize labels as empty list
         mock_pr2.draft = False  # Initialize draft field
+        mock_pr2.mergeable = True  # Initialize mergeable field
 
         mock_repo.get_pulls.return_value = [mock_pr1, mock_pr2]
         mock_github.get_repo.return_value = mock_repo
@@ -157,6 +159,7 @@ class TestGitHubClient:
             mock_pr.updated_at = datetime.now(timezone.utc)
             mock_pr.labels = []  # Initialize labels as empty list
             mock_pr.draft = False  # Initialize draft field
+            mock_pr.mergeable = True  # Initialize mergeable field
             mock_prs.append(mock_pr)
 
         mock_repo.get_pulls.return_value = mock_prs[:3]  # Simulate GitHub's limit

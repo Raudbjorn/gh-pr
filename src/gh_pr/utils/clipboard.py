@@ -9,9 +9,15 @@ from typing import Optional
 class ClipboardManager:
     """Manage clipboard operations."""
 
-    def __init__(self):
-        """Initialize ClipboardManager."""
+    def __init__(self, timeout: float = 5.0):
+        """
+        Initialize ClipboardManager.
+
+        Args:
+            timeout: Timeout in seconds for clipboard operations (default: 5.0)
+        """
         self.clipboard_cmd = self._detect_clipboard_command()
+        self.timeout = timeout
 
     def _detect_clipboard_command(self) -> Optional[list[str]]:
         """
@@ -63,19 +69,25 @@ class ClipboardManager:
             return False
 
         try:
-            # Security: clipboard_cmd is a list of hardcoded strings from _detect_clipboard_command()
-            # No user input is used in command construction, preventing command injection
-            # Using list format with shell=False provides defense in depth
+            # Security: Command list is pre-validated and safe
+            # 1. self.clipboard_cmd is a predefined list, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Input text is passed via stdin, not as command argument
+            # 4. Has implicit timeout via communicate()
             process = subprocess.Popen(
-                self.clipboard_cmd,  # Safe: hardcoded command list
+                self.clipboard_cmd,  # Safe: predefined list from _detect_clipboard_command
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 shell=False,  # Explicitly ensure no shell is used
             )
-            stdout, stderr = process.communicate(input=text.encode("utf-8"), timeout=5)
+            # Use configurable timeout to prevent hanging
+            process.communicate(input=text.encode("utf-8"), timeout=self.timeout)
             return process.returncode == 0
-        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return False
+        except (OSError, subprocess.SubprocessError):
             return False
 
     def is_available(self) -> bool:

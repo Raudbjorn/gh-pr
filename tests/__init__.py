@@ -1,1 +1,1 @@
-"""Test package for gh-pr."""
+"""Test suite for gh-pr project."""

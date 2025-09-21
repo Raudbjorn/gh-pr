@@ -3,7 +3,7 @@
 from typing import Any, Optional
 import logging
 
-from github import Github, GithubException
+from github import Auth, Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
@@ -25,8 +25,10 @@ class GitHubClient:
             token: GitHub authentication token
             timeout: API request timeout in seconds
         """
-        self.token = token  # Store token for GraphQL client
-        self.github = Github(token, timeout=timeout)
+        # Store token privately to avoid accidental exposure
+        self._token = token
+        auth = Auth.Token(token)
+        self.github = Github(auth=auth)
         self._user = None
         self.timeout = timeout
 
@@ -116,6 +118,8 @@ class GitHubClient:
                 "created_at": pr.created_at.isoformat() if pr.created_at else None,
                 "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
                 "draft": pr.draft,
+                # Skip mergeable field - it triggers expensive API call
+                # "mergeable": pr.mergeable,
                 "labels": [label.name for label in pr.labels],
             }
 
@@ -358,6 +362,5 @@ class GitHubClient:
         """
         try:
             return self.user.login
-        except GithubException as e:
-            logger.error(f"Failed to get current user login: {e}")
+        except GithubException:
             return None
