@@ -1,16 +1,22 @@
 """Interactive Terminal User Interface (TUI) for gh-pr using Textual."""
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, ClassVar, Dict, List, Optional
+from datetime import datetime
+
+# UI Constants
+MAX_TITLE_LENGTH = 50
 
 from rich import box
 from rich.panel import Panel
 from rich.table import Table
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widget import Widget
-from textual.widgets import Button, Footer, Header, Input, ListItem, ListView, Static
+from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
+from textual.reactive import reactive
+from textual.message import Message
 
 from ..core.github import GitHubClient
 from ..core.pr_manager import PRManager
@@ -43,7 +49,7 @@ class PRListItem(ListItem):
             state_color = "grey50"
         else:
             state_color = "yellow"
-        label = f"[bold]#{pr_number}[/bold] - {title[:50]}... by [cyan]{author}[/cyan] [{state_color}]{state}[/{state_color}]"
+        label = f"[bold]#{pr_number}[/bold] - {title[:MAX_TITLE_LENGTH]}... by [cyan]{author}[/cyan] [{state_color}]{state}[/{state_color}]"
 
         super().__init__(Static(label), *args, **kwargs)
 
@@ -68,7 +74,7 @@ class FilterMenu(Widget):
     """
 
     # Define available filters with descriptions
-    FILTERS = {
+    FILTERS: ClassVar[Dict[str, str]] = {
         "all": "All Comments",
         "unresolved": "Unresolved Only",
         "resolved_active": "Resolved (Active)",
@@ -257,11 +263,27 @@ class SearchBar(Widget):
         # Cancel previous search task
         if self._search_task and not self._search_task.done():
             self._search_task.cancel()
+            # Ensure cancellation is handled
+            try:
+                asyncio.create_task(self._handle_cancelled_task(self._search_task))
+            except Exception:
+                pass  # Task already cancelled or finished
 
         # Start new debounced search
         self._search_task = asyncio.create_task(
             self._debounced_search(event.value.strip())
         )
+
+    async def _handle_cancelled_task(self, task: asyncio.Task) -> None:
+        """Handle cancelled task cleanup.
+
+        Args:
+            task: The cancelled task to clean up
+        """
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass  # Expected when task is cancelled
 
     async def _debounced_search(self, query: str) -> None:
         """Perform debounced search after delay.
@@ -533,7 +555,12 @@ class GhPrTUI(App):
                 )
 
             # Debounce: wait 150ms before starting search
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # Fallback for when not in async context
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
             self._search_debounce_handle = loop.call_later(
                 0.15, lambda: asyncio.create_task(debounce_search())
             )

@@ -22,9 +22,20 @@ def _sanitize_filename(filename: str) -> str:
     if name_without_ext in RESERVED_NAMES:
         sanitized = f"_{sanitized}"
 
-    # Truncate if too long
+    # Truncate if too long while preserving extension
     if len(sanitized) > MAX_FILENAME_LENGTH:
-        sanitized = sanitized[:MAX_FILENAME_LENGTH]
+        # Try to preserve the extension if present
+        parts = sanitized.rsplit('.', 1)
+        if len(parts) == 2 and len(parts[1]) <= 10:  # Reasonable extension length
+            name, ext = parts
+            # Keep as much of the name as possible while fitting the limit
+            max_name_len = MAX_FILENAME_LENGTH - len(ext) - 1
+            if max_name_len > 0:
+                sanitized = f"{name[:max_name_len]}.{ext}"
+            else:
+                sanitized = sanitized[:MAX_FILENAME_LENGTH]
+        else:
+            sanitized = sanitized[:MAX_FILENAME_LENGTH]
 
     return sanitized or "export"
 

@@ -27,7 +27,7 @@ from .utils.export import ExportManager
 console = Console()
 
 # Constants for backwards compatibility with tests
-MAX_CONTEXT_LINES = 10
+MAX_CONTEXT_LINES = 3
 
 @dataclass
 class CLIConfig:
@@ -259,7 +259,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
     if clear_cache:
         cache_manager.clear()
         console.print("[green]✓ Cache cleared successfully[/green]")
-        return None, None, None
+        return None
 
     token_manager = TokenManager(token=token, config_manager=config_manager)
 
@@ -612,36 +612,16 @@ def _launch_tui(cfg: CLIConfig) -> None:
     try:
         from .ui.interactive import GhPrTUI
 
-        # Initialize services
-        result = _initialize_services(
-            cfg.config, cfg.no_cache, cfg.clear_cache, cfg.token
-        )
-        if result is None:
-            return  # Cache was cleared
-        config_manager, cache_manager, token_manager = result
-
+    if clear_cache:
+        cache_manager.clear()
+        console.print("[green]✓ Cache cleared successfully[/green]")
+        return None
         # Initialize GitHub client
         github_client = GitHubClient(token_manager.get_token())
 
-        # Create TUI configuration
-        tui_config = {
-            "github_token": token_manager.get_token(),
-            "default_repo": cfg.repo or config_manager.get("default_repo"),
-            "cache_ttl": config_manager.get("cache.ttl", 300),
-            "theme": config_manager.get("ui.theme", "default"),
-            "tui_settings": {
-                "auto_refresh": config_manager.get("tui.auto_refresh", False),
-                "refresh_interval": config_manager.get("tui.refresh_interval", 60),
-                "show_drafts": config_manager.get("tui.show_drafts", True),
-            }
-        }
-
-        # Create mock config object
-        from types import SimpleNamespace
-
         # Initialize PR Manager
         from .core.pr_manager import PRManager
-        pr_manager = PRManager(github_client, cache_manager)
+        pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
 
         # Launch the TUI
         app = GhPrTUI(
