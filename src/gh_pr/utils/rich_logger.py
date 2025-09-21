@@ -194,26 +194,28 @@ class RichLogger:
             'API_KEY', 'ACCESS_TOKEN', 'REFRESH_TOKEN', 'AUTH_TOKEN'
         ]
 
+        import re
+
         masked_text = text
         for var, value in os.environ.items():
             if any(pattern in var.upper() for pattern in sensitive_patterns) and value and len(value) > 4:
-                    # Use word boundaries for more precise replacement
-                    # Also mask environment variable assignments like VAR=value
-                    escaped_value = re.escape(value)
-                    masked_value = value[:4] + '*' * (len(value) - 4)
+                # Use word boundaries for more precise replacement
+                # Also mask environment variable assignments like VAR=value
+                escaped_value = re.escape(value)
+                masked_value = value[:4] + '*' * (len(value) - 4)
 
-                    # Replace value when it appears standalone or in assignments
-                    patterns = [
-                        rf'\b{escaped_value}\b',  # Word boundaries
-                        rf'({re.escape(var)}=){escaped_value}'  # VAR=value pattern
-                    ]
+                # Replace value when it appears standalone or in assignments
+                patterns = [
+                    rf'\b{escaped_value}\b',  # Word boundaries
+                    rf'({re.escape(var)}=){escaped_value}'  # VAR=value pattern
+                ]
 
-                    for pattern in patterns:
-                        if '=' in pattern:
-                            # For assignment patterns, preserve the VAR= part
-                            masked_text = re.sub(pattern, rf'\1{masked_value}', masked_text)
-                        else:
-                            masked_text = re.sub(pattern, masked_value, masked_text)
+                for pattern in patterns:
+                    if '=' in pattern:
+                        # For assignment patterns, preserve the VAR= part
+                        masked_text = re.sub(pattern, rf'\1{masked_value}', masked_text)
+                    else:
+                        masked_text = re.sub(pattern, masked_value, masked_text) af019e40587db64a2b366658b7392473d3b88829
 
         return masked_text
 
@@ -265,7 +267,7 @@ class RichLogger:
         """
         Create a child logger with the same configuration.
 
-        The child logger inherits output settings from the parent logger.
+        The child logger inherits output settings (console_output, file_output) from the parent.
         """
         child_name = f"{self.name}.{suffix}"
         return RichLogger(
