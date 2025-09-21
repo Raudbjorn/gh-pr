@@ -20,7 +20,7 @@ class TestGitHubClient(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.token = "ghp_test_token_123"
+        self.token = "ghp_FAKE_TEST_TOKEN_REPLACED"
 
         # Mock Github instance
         self.mock_github = Mock(spec=Github)

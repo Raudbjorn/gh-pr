@@ -360,8 +360,10 @@ class PRManager:
                 "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
                 "merged": pr.merged,
                 "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
-                "mergeable": pr.mergeable,
-                "mergeable_state": pr.mergeable_state,
+                # Skip mergeable fields - they trigger expensive API calls
+                # Only fetch if explicitly needed for merge operations
+                # "mergeable": pr.mergeable,
+                # "mergeable_state": pr.mergeable_state,
                 "head": {
                     "ref": pr.head.ref,
                     "sha": pr.head.sha,
