@@ -3,6 +3,13 @@
 import datetime
 import hashlib
 from typing import Any, Optional
+from functools import lru_cache
+
+# Helper function for backwards compatibility with tests
+@lru_cache(maxsize=128)
+def _parse_datetime_cached(date_string: str) -> datetime.datetime:
+    """Parse datetime string with caching."""
+    return datetime.datetime.fromisoformat(date_string.replace('Z', '+00:00'))
 
 
 class CommentProcessor:

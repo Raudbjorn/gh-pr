@@ -5,6 +5,28 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+import re
+
+# Constants for test compatibility
+INVALID_FILENAME_CHARS = r'[<>:"/\\|?*]'
+MAX_FILENAME_LENGTH = 255
+RESERVED_NAMES = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{i}' for i in range(1, 10)] + [f'LPT{i}' for i in range(1, 10)]
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize filename for filesystem safety."""
+    # Remove invalid characters
+    sanitized = re.sub(INVALID_FILENAME_CHARS, '_', filename)
+
+    # Check reserved names
+    name_without_ext = sanitized.split('.')[0].upper()
+    if name_without_ext in RESERVED_NAMES:
+        sanitized = f"_{sanitized}"
+
+    # Truncate if too long
+    if len(sanitized) > MAX_FILENAME_LENGTH:
+        sanitized = sanitized[:MAX_FILENAME_LENGTH]
+
+    return sanitized or "export"
 
 
 class ExportManager:

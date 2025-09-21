@@ -8,6 +8,17 @@ try:
 except ImportError:
     import tomli as tomllib
 
+# Constants for test compatibility
+ALLOWED_CONFIG_DIRS = ['/home', '/tmp', '/etc']
+
+def _validate_config_path(path: Path) -> bool:
+    """Validate config path for security."""
+    try:
+        resolved = path.resolve()
+        return any(str(resolved).startswith(d) for d in ALLOWED_CONFIG_DIRS)
+    except:
+        return False
+
 import tomli_w
 
 

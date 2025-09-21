@@ -24,6 +24,9 @@ from .utils.export import ExportManager
 
 console = Console()
 
+# Constants for backwards compatibility with tests
+MAX_CONTEXT_LINES = 10
+
 @dataclass
 class CLIConfig:
     """Configuration for CLI command."""

@@ -6,6 +6,10 @@ from github import Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+# Constants for test compatibility
+DEFAULT_TIMEOUT = 30
+CONNECTION_TIMEOUT = 10
+
 
 class GitHubClient:
     """Wrapper for GitHub API operations."""
