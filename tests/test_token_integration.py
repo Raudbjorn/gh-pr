@@ -377,3 +377,32 @@ class TestCLITokenFeatures:
 
         assert result.exit_code != 0
         assert "token" in result.output.lower() or "authentication" in result.output.lower()
+
+    def test_gh_cli_fallback_integration(self):
+        """Test that gh CLI token is used when other sources are unavailable."""
+        runner = CliRunner()
+
+        # Clear environment variables so gh CLI fallback is used
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("gh_pr.auth.token.TokenManager._get_gh_cli_token") as mock_gh_cli:
+                mock_gh_cli.return_value = "ghp_cli_fallback_token"
+
+                with patch("gh_pr.auth.token.Github") as mock_github_class:
+                    mock_github = Mock()
+                    mock_user = Mock()
+                    mock_user.login = "testuser"
+                    mock_github.get_user.return_value = mock_user
+
+                    mock_rate_limit = Mock()
+                    mock_rate_limit.core.limit = 5000
+                    mock_rate_limit.core.remaining = 4999
+                    mock_rate_limit.core.reset = datetime.now(timezone.utc)
+                    mock_github.get_rate_limit.return_value = mock_rate_limit
+                    mock_github_class.return_value = mock_github
+
+                    result = runner.invoke(main, ["--token-info"])
+
+        assert result.exit_code == 0
+        assert "Token Type:" in result.output
+        # Verify gh CLI token was used
+        mock_gh_cli.assert_called()

@@ -246,7 +246,10 @@ class TestTokenExpiration:
         # Setup config with expiration metadata
         config = ConfigManager()
         future_date = datetime.now(timezone.utc) + timedelta(days=30)
-        config.set("tokens.github_pat.expires_at", future_date.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", future_date.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -269,7 +272,10 @@ class TestTokenExpiration:
 
         config = ConfigManager()
         near_future = datetime.now(timezone.utc) + timedelta(days=5)
-        config.set("tokens.github_pat.expires_at", near_future.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", near_future.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -292,7 +298,10 @@ class TestTokenExpiration:
 
         config = ConfigManager()
         past_date = datetime.now(timezone.utc) - timedelta(days=1)
-        config.set("tokens.github_pat.expires_at", past_date.isoformat())
+        # Use proper token key (first 16 chars of SHA256 hash)
+        import hashlib
+        token_key = hashlib.sha256("github_pat_fine_grained".encode()).hexdigest()[:16]
+        config.set(f"tokens.{token_key}.expires_at", past_date.isoformat())
 
         manager = TokenManager(token="github_pat_fine_grained", config_manager=config)  # noqa: S106
         expiration = manager.check_expiration()
@@ -353,8 +362,8 @@ class TestPermissions:
             assert manager.has_permissions(["repo", "write:discussion"]) is True
             assert manager.has_permissions(["admin:org"]) is False
     @patch("gh_pr.auth.token.Github")
-    def test_has_permissions_fine_grained_token(self, mock_github_class):
-        """Test permission checking for fine-grained token."""
+    def test_has_permissions_fine_grained_token_success(self, mock_github_class):
+        """Test permission checking for fine-grained token succeeds."""
         mock_github = Mock()
         mock_user = Mock()
         mock_repos = Mock()
@@ -382,9 +391,32 @@ class TestPermissions:
 
         manager = TokenManager(token="github_pat_fine_grained")  # noqa: S106
 
-        # Should attempt to check permissions by making API calls
+        # Should successfully check permissions
         result = manager.has_permissions(["repo"])
-        assert isinstance(result, bool)
+        assert result is True
+
+    @patch("gh_pr.auth.token.Github")
+    def test_has_permissions_fine_grained_token_failure(self, mock_github_class):
+        """Test permission checking for fine-grained token fails."""
+        mock_github = Mock()
+
+        # Setup mock to raise GithubException for permission denied
+        mock_github.get_user.side_effect = GithubException(403, "Insufficient permissions")
+
+        # Mock rate limit to avoid TypeError
+        mock_rate_limit = Mock()
+        mock_rate_limit.core.limit = 5000
+        mock_rate_limit.core.remaining = 4999
+        mock_rate_limit.core.reset = datetime.now(timezone.utc)
+        mock_github.get_rate_limit.return_value = mock_rate_limit
+
+        mock_github_class.return_value = mock_github
+
+        manager = TokenManager(token="github_pat_fine_grained")  # noqa: S106
+
+        # Should fail permission check when API calls are denied
+        result = manager.has_permissions(["repo"])
+        assert result is False
 
 
 class TestTokenMetadata:
