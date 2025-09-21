@@ -354,11 +354,19 @@ class PluginLoader:
         Get plugins that provide a specific capability.
 
         Args:
-            capability: Capability name
+            capability: Capability name (string or PluginCapability enum)
 
         Returns:
             List of plugins with the capability
         """
+        # Normalize the capability to a string value
+        if hasattr(capability, "value"):
+            # It's an enum member, get its value
+            capability = capability.value
+        else:
+            # Ensure it's a string
+            capability = str(capability)
+
         plugins = []
 
         for plugin in self._loaded_plugins.values():

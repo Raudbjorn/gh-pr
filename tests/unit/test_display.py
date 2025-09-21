@@ -8,15 +8,10 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 from io import StringIO
+import io
 
+from rich.console import Console
 from gh_pr.ui.display import DisplayManager as PRDisplay
-# Mock other classes that don't exist
-class TableDisplay: pass
-class ColorScheme: pass
-class ProgressDisplay: pass
-def format_timedelta(td): return str(td)
-def truncate_text(text, length): return text[:length]
-def highlight_search_term(text, term): return text
 
 
 class TestPRDisplay(unittest.TestCase):
@@ -24,7 +19,10 @@ class TestPRDisplay(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.display = PRDisplay()
+        # Create a Console that writes to a capture buffer
+        self.output_buffer = io.StringIO()
+        self.console = Console(file=self.output_buffer, force_terminal=True, width=120)
+        self.display = PRDisplay(self.console)
 
     def test_format_pr_summary(self):
         """Test formatting PR summary."""

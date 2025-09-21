@@ -146,7 +146,7 @@ class TestPermissionChecker(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.mock_token_manager = Mock()
-        self.mock_token_manager.get_github_client.return_value = Mock()
+        self.mock_token_manager.get_token.return_value = "test_token_123"
         self.checker = PermissionChecker(self.mock_token_manager)
 
     @unittest.skip("PermissionChecker doesn't have check_repo_permissions method")
