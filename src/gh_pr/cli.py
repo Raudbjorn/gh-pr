@@ -246,7 +246,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
     if clear_cache:
         cache_manager.clear()
         console.print("[green]✓ Cache cleared successfully[/green]")
-        return None, None, None
+        return None
 
     token_manager = TokenManager(token=token)
 
@@ -513,7 +513,7 @@ def _launch_tui(cfg: CLIConfig) -> None:
 
         # Initialize PR Manager
         from .core.pr_manager import PRManager
-        pr_manager = PRManager(github_client, cache_manager)
+        pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
 
         # Launch the TUI
         app = GhPrTUI(

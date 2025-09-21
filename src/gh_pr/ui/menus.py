@@ -1,6 +1,6 @@
 """Interactive menu system for gh-pr TUI."""
 
-from typing import List, Dict, Any, Optional, Callable, Tuple
+from typing import List, Dict, Any, Optional, Callable, Tuple, ClassVar
 from dataclasses import dataclass
 from enum import Enum
 
@@ -213,9 +213,23 @@ class FilterOptionsMenu(Widget):
             event: Radio set change event
         """
         if event.radio_set.id == "filter_status":
-            self.filters["status"] = str(event.value)
+            pressed = getattr(event, "pressed", None)
+            if pressed and pressed.id:
+                if pressed.id == "status_all":
+                    self.filters["status"] = "all"
+                elif pressed.id == "status_unresolved":
+                    self.filters["status"] = "unresolved"
+                elif pressed.id == "status_resolved":
+                    self.filters["status"] = "resolved"
         elif event.radio_set.id == "filter_location":
-            self.filters["location"] = str(event.value)
+            pressed = getattr(event, "pressed", None)
+            if pressed and pressed.id:
+                if pressed.id == "loc_all":
+                    self.filters["location"] = "all"
+                elif pressed.id == "loc_current":
+                    self.filters["location"] = "current"
+                elif pressed.id == "loc_outdated":
+                    self.filters["location"] = "outdated"
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle switch change.
@@ -253,7 +267,7 @@ class SortOptionsMenu(Widget):
     }
     """
 
-    SORT_OPTIONS = [
+    SORT_OPTIONS: ClassVar[List[Tuple[str, str]]] = [
         ("newest", "Newest First"),
         ("oldest", "Oldest First"),
         ("most_comments", "Most Comments"),
@@ -343,7 +357,7 @@ class ExportMenu(Widget):
     }
     """
 
-    EXPORT_FORMATS = [
+    EXPORT_FORMATS: ClassVar[List[Tuple[str, str, str]]] = [
         ("markdown", "Markdown (.md)", "📝"),
         ("csv", "CSV (.csv)", "📊"),
         ("json", "JSON (.json)", "📄"),
@@ -446,7 +460,7 @@ class KeyBindingsDisplay(Widget):
     """
 
     # Default key bindings
-    DEFAULT_BINDINGS = [
+    DEFAULT_BINDINGS: ClassVar[List[KeyBinding]] = [
         KeyBinding("q", MenuAction.QUIT, "Quit application"),
         KeyBinding("r", MenuAction.REFRESH, "Refresh PR/comments"),
         KeyBinding("f", MenuAction.FILTER, "Toggle filter menu"),

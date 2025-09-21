@@ -185,16 +185,19 @@ class TestFilterOptionsMenu:
         # Mock radio set event for status
         mock_radio_set = Mock()
         mock_radio_set.id = "filter_status"
+        mock_pressed = Mock()
+        mock_pressed.id = "status_unresolved"
         mock_event = Mock()
         mock_event.radio_set = mock_radio_set
-        mock_event.value = "unresolved"
+        mock_event.pressed = mock_pressed
 
         menu.on_radio_set_changed(mock_event)
         assert menu.filters["status"] == "unresolved"
 
         # Mock radio set event for location
         mock_radio_set.id = "filter_location"
-        mock_event.value = "outdated"
+        mock_pressed.id = "loc_outdated"
+        mock_event.pressed = mock_pressed
 
         menu.on_radio_set_changed(mock_event)
         assert menu.filters["location"] == "outdated"
