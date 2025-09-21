@@ -21,6 +21,8 @@ from textual.message import Message
 from ..core.github import GitHubClient
 from ..core.pr_manager import PRManager
 from ..utils.config import ConfigManager
+from .themes import ThemeManager
+from .menus import ActionMenu, FilterOptionsMenu, SortOptionsMenu, ExportMenu, MenuAction
 
 
 class PRListItem(ListItem):
@@ -369,6 +371,11 @@ class GhPrTUI(App):
         self.config_manager = config_manager
         self.initial_repo = initial_repo
 
+        # Initialize theme manager
+        self.theme_manager = ThemeManager()
+        theme_name = config_manager.get("display.color_theme", "default")
+        self.theme_manager.set_theme(theme_name)
+
         # State
         self.current_repo = initial_repo
         self.prs = []
@@ -381,9 +388,18 @@ class GhPrTUI(App):
         self._search_task = None
         self._search_debounce_handle = None
 
+    def on_mount(self) -> None:
+        """Called when the widget is mounted."""
+        super().on_mount()
+        # Apply theme to console
+        self.console.push_theme(self.theme_manager.get_rich_theme())
+
     def compose(self) -> ComposeResult:
         """Compose the TUI layout."""
         yield Header()
+
+        # Action menu bar
+        yield ActionMenu(on_action=self.handle_menu_action)
 
         # Search bar at top
         with Container(id="search-container"):
@@ -401,6 +417,19 @@ class GhPrTUI(App):
             self.filter_menu = FilterMenu(on_filter_change=self.handle_filter_change)
             self.filter_menu.display = False
             yield self.filter_menu
+
+            # Additional menus (initially hidden)
+            self.filter_options_menu = FilterOptionsMenu(on_filter_change=self.handle_filter_option_change)
+            self.filter_options_menu.display = False
+            yield self.filter_options_menu
+
+            self.sort_menu = SortOptionsMenu(on_sort_change=self.handle_sort_change)
+            self.sort_menu.display = False
+            yield self.sort_menu
+
+            self.export_menu = ExportMenu(on_export=self.handle_export)
+            self.export_menu.display = False
+            yield self.export_menu
 
         yield Footer()
 
@@ -554,15 +583,14 @@ class GhPrTUI(App):
                     self.handle_search(f"{self.current_repo}#{pr_data['number']}")
                 )
 
-            # Debounce: wait 150ms before starting search
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # Fallback for when not in async context
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            self._search_debounce_handle = loop.call_later(
-                0.15, lambda: asyncio.create_task(debounce_search())
+            # Debounce: wait 150ms before starting search using Textual timer
+            # Cancel previous timer if it exists
+            if hasattr(self, '_search_debounce_timer'):
+                self._search_debounce_timer.stop()
+
+            # Set new timer
+            self._search_debounce_timer = self.set_timer(
+                0.15, lambda: self.run_worker(debounce_search)
             )
 
     def action_quit(self) -> None:
@@ -626,14 +654,102 @@ class GhPrTUI(App):
             pr_number = self.current_pr.get("number")
             url = f"https://github.com/{owner}/{repo}/pull/{pr_number}"
 
-            # Import clipboard manager
-            from ..utils.clipboard import ClipboardManager
-            clipboard = ClipboardManager()
+            # Run clipboard operation in a thread to avoid blocking UI
+            self.run_worker(self._copy_to_clipboard, url, exclusive=False, thread=True)
 
-            if clipboard.copy(url):
-                self.notify(f"Copied: {url}", severity="information")
+    def _copy_to_clipboard(self, url: str) -> None:
+        """Copy URL to clipboard in background thread."""
+        from ..utils.clipboard import ClipboardManager
+        clipboard = ClipboardManager()
+
+        success = clipboard.copy(url)
+
+        # Post notification back to main thread
+        if success:
+            self.call_from_thread(self.notify, f"Copied: {url}", "information")
+        else:
+            self.call_from_thread(self.notify, "Failed to copy to clipboard", "error")
+
+    def handle_menu_action(self, action: MenuAction) -> None:
+        """Handle menu action from ActionMenu."""
+        if action == MenuAction.REFRESH:
+            self.action_refresh()
+        elif action == MenuAction.FILTER:
+            self.action_toggle_filter()
+        elif action == MenuAction.SORT:
+            self.toggle_sort_menu()
+        elif action == MenuAction.EXPORT:
+            self.toggle_export_menu()
+        elif action == MenuAction.COPY:
+            self.action_copy_url()
+        elif action == MenuAction.SETTINGS:
+            self.show_settings_menu()
+        elif action == MenuAction.HELP:
+            self.action_show_help()
+        elif action == MenuAction.QUIT:
+            self.action_quit()
+
+    def toggle_sort_menu(self) -> None:
+        """Toggle the sort options menu."""
+        if hasattr(self, 'sort_menu'):
+            self.sort_menu.display = not self.sort_menu.display
+
+    def toggle_export_menu(self) -> None:
+        """Toggle the export options menu."""
+        if hasattr(self, 'export_menu'):
+            self.export_menu.display = not self.export_menu.display
+
+    def show_settings_menu(self) -> None:
+        """Show settings/preferences."""
+        # For now, just show a notification - could be expanded later
+        self.notify("Settings menu - Feature coming soon!", severity="information")
+
+    def handle_filter_option_change(self, filter_type: str) -> None:
+        """Handle filter option change from FilterOptionsMenu."""
+        self.filter_mode = filter_type
+        if self.current_repo:
+            self.load_prs()
+
+    def handle_sort_change(self, sort_option: str) -> None:
+        """Handle sort option change from SortOptionsMenu."""
+        # Sort the current PR list
+        if sort_option == "title":
+            self.prs.sort(key=lambda pr: pr.get("title", "").lower())
+        elif sort_option == "number":
+            self.prs.sort(key=lambda pr: pr.get("number", 0), reverse=True)
+        elif sort_option == "author":
+            self.prs.sort(key=lambda pr: pr.get("author", "").lower())
+        elif sort_option == "created":
+            self.prs.sort(key=lambda pr: pr.get("created_at", ""), reverse=True)
+        elif sort_option == "updated":
+            self.prs.sort(key=lambda pr: pr.get("updated_at", ""), reverse=True)
+
+        # Refresh the display
+        self.update_pr_list()
+
+    def handle_export(self, export_format: str, filename: str = None) -> None:
+        """Handle export request from ExportMenu."""
+        if not self.current_pr or not self.current_comments:
+            self.notify("No PR data to export", severity="warning")
+            return
+
+        # Use export manager to handle the export
+        from ..utils.export import ExportManager
+        export_manager = ExportManager()
+
+        try:
+            result = export_manager.export(
+                self.current_pr,
+                self.current_comments,
+                export_format,
+                filename
+            )
+            if result:
+                self.notify(f"Exported to {result}", severity="success")
             else:
-                self.notify("Failed to copy to clipboard", severity="error")
+                self.notify("Export failed", severity="error")
+        except Exception as e:
+            self.notify(f"Export error: {str(e)}", severity="error")
 
 
 def run_tui(

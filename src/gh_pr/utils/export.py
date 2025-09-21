@@ -14,13 +14,24 @@ RESERVED_NAMES = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{i}' for i in range(1, 10)
 
 def _sanitize_filename(filename: str) -> str:
     """Sanitize filename for filesystem safety."""
+    # Handle empty or whitespace-only filenames
+    if not filename or not filename.strip():
+        return "export_file"
+
     # Remove invalid characters
     sanitized = re.sub(INVALID_FILENAME_CHARS, '_', filename)
+
+    # Strip leading/trailing dots and spaces
+    sanitized = sanitized.strip(' .')
+
+    # Handle dot-only or empty after stripping
+    if not sanitized or sanitized in ['.', '..', '...']:
+        return f"export_{sanitized or 'file'}"
 
     # Check reserved names
     name_without_ext = sanitized.split('.')[0].upper()
     if name_without_ext in RESERVED_NAMES:
-        sanitized = f"_{sanitized}"
+        sanitized = f"export_{sanitized}"
 
     # Truncate if too long while preserving extension
     if len(sanitized) > MAX_FILENAME_LENGTH:
@@ -37,7 +48,7 @@ def _sanitize_filename(filename: str) -> str:
         else:
             sanitized = sanitized[:MAX_FILENAME_LENGTH]
 
-    return sanitized or "export"
+    return sanitized or "export_file"
 
 
 class ExportManager:

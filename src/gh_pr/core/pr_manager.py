@@ -17,18 +17,6 @@ from .graphql import GraphQLClient
 
 logger = logging.getLogger(__name__)
 
-def _validate_git_repository(path: Path = Path.cwd()) -> bool:
-    """Validate that path is inside a git repository."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            cwd=path,
-            capture_output=True,
-            text=True
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
 
 
 class PRManager:
