@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 from github import Github
 
-from gh_pr.auth.token import TokenManager
+from gh_pr.auth.token import TokenManager, SUBPROCESS_TIMEOUT
 from gh_pr.cli import main
 from gh_pr.utils.config import ConfigManager
 
@@ -279,6 +279,25 @@ class TestTokenPermissions:
 class TestTokenStorage:
     """Integration tests for token storage in configuration."""
 
+    def _create_token_manager_with_mock_github(self, token="github_pat_test123", config_manager=None):
+        """Helper method to create TokenManager with mocked GitHub API."""
+        manager = TokenManager(token=token, config_manager=config_manager)  # noqa: S106
+
+        with patch("gh_pr.auth.token.Github") as mock_github_class:
+            mock_github = Mock()
+            mock_rate_limit = Mock()
+            mock_rate_limit.core.limit = 5000
+            mock_rate_limit.core.remaining = 4999
+            mock_rate_limit.core.reset = datetime.now(timezone.utc)
+            mock_github.get_rate_limit.return_value = mock_rate_limit
+
+            mock_user = Mock()
+            mock_user.login = "testuser"
+            mock_github.get_user.return_value = mock_user
+
+            mock_github_class.return_value = mock_github
+            yield manager, mock_github
+
     def test_store_and_retrieve_token_metadata(self):
         """Test storing and retrieving token metadata from configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -373,14 +392,14 @@ class TestTokenStorage:
                 assert first_call[0][0] == ["gh", "auth", "status", "--show-token"]
                 assert first_call[1]["capture_output"] is True
                 assert first_call[1]["text"] is True
-                assert first_call[1]["timeout"] == 10
+                assert first_call[1]["timeout"] == SUBPROCESS_TIMEOUT
 
                 # Second call should be gh auth token
                 second_call = mock_subprocess.call_args_list[1]
                 assert second_call[0][0] == ["gh", "auth", "token"]
                 assert second_call[1]["capture_output"] is True
                 assert second_call[1]["text"] is True
-                assert second_call[1]["timeout"] == 10
+                assert second_call[1]["timeout"] == SUBPROCESS_TIMEOUT
 
     def test_gh_cli_token_fallback_failure_integration(self):
         """Test behavior when gh CLI token fallback fails."""
@@ -393,14 +412,14 @@ class TestTokenStorage:
             # Ensure no environment variables provide tokens
             env_vars_to_clear = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ACCESS_TOKEN']
             with patch.dict(os.environ, {var: "" for var in env_vars_to_clear}, clear=False):
-                # Create manager without explicit token
-                manager = TokenManager()
+                # TokenManager.__init__ calls _get_token which raises ValueError on discovery failure
+                with pytest.raises(ValueError) as exc_info:
+                    TokenManager()
 
-                # Should return None when gh CLI fails
-                token = manager.get_token()
-                assert token is None
+                # Verify the error message is appropriate
+                assert "No GitHub token found" in str(exc_info.value)
 
-                # Verify subprocess was attempted
+                # Verify subprocess was attempted (gh CLI fallback was tried)
                 assert mock_subprocess.call_count >= 1
 
 
