@@ -146,20 +146,13 @@ Launch the interactive Terminal User Interface with `gh-pr --tui` for a full-fea
 |-----|--------|-------------|
 | `q` | Quit | Exit the application |
 | `r` | Refresh | Reload PR data |
-| `j` / `↓` | Next | Move to next item |
-| `k` / `↑` | Previous | Move to previous item |
-| `g` | Top | Go to first item |
-| `G` | Bottom | Go to last item |
+| `j` | Next PR | Move to next PR |
+| `k` | Previous PR | Move to previous PR |
 | `Enter` | Select | View PR details |
-| `/` | Search | Focus the search input |
-| `s` | Sort | Open sort menu |
-| `e` | Export | Export data |
-| `c` | Copy | Copy to clipboard |
-| `o` | Browser | Open in browser |
-| `,` | Settings | Open settings menu |
+| `s` | Search | Focus the search input |
+| `f` | Filters | Toggle filter menu |
+| `Ctrl+C` | Copy URL | Copy PR URL to clipboard |
 | `?` | Help | Show help screen |
-| `Tab` | Next pane | Switch focus to next pane |
-| `Shift+Tab` | Prev pane | Switch focus to previous pane |
 
 ### Available Themes
 
