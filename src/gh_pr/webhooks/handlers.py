@@ -114,17 +114,16 @@ class PREventHandler(EventHandler):
             # Send notification if manager available
             if self.notification_manager:
                 try:
-                    await self.notification_manager.notify(
+                    ok = await self.notification_manager.notify(
                         title="GitHub PR Update",
                         message=" ".join(message_parts),
                         pr_number=pr_number,
                         repo=repo_name
                     )
-                    result['notification_sent'] = True
+                    result['notification_sent'] = bool(ok)
                 except Exception as e:
-                    logger.error(f"Failed to send notification: {e}")
+                    logger.exception("Failed to send notification")
                     result['notification_error'] = str(e)
-
         result['message'] = " ".join(message_parts) if message_parts else "No message generated"
         return result
 
