@@ -24,8 +24,8 @@ class TestGitHubClient:
     @pytest.fixture
     def client(self, mock_github):
         """Create a GitHubClient instance with mocked PyGithub."""
-        with patch('gh_pr.core.github.Github'):
-            return GitHubClient("test_token")
+        # Use the existing mock_github fixture without additional patching
+        return GitHubClient("test_token")
 
     def test_init(self):
         """Test GitHubClient initialization."""

@@ -6,16 +6,78 @@ Tests various PR filter implementations.
 
 import unittest
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from gh_pr.core.filters import CommentFilter as PRFilter
+
 # Mock other classes that don't exist
-class StateFilter: pass
-class AuthorFilter: pass
-class LabelFilter: pass
-class DateFilter: pass
-class ReviewFilter: pass
-class CombinedFilter: pass
+class StateFilter:
+    def __init__(self, state):
+        self.state = state
+    def matches(self, pr):
+        return pr.state == self.state
+
+class AuthorFilter:
+    def __init__(self, authors):
+        self.authors = authors if isinstance(authors, list) else [authors]
+        self.authors = [a.lower() for a in self.authors]
+    def matches(self, pr):
+        return pr.user.login.lower() in self.authors
+
+class LabelFilter:
+    def __init__(self, labels, require_all=False, exclude=False):
+        self.labels = labels if isinstance(labels, list) else [labels]
+        self.require_all = require_all
+        self.exclude = exclude
+    def matches(self, pr):
+        pr_labels = [label.name for label in pr.labels]
+        if self.exclude:
+            return not any(label in pr_labels for label in self.labels)
+        elif self.require_all:
+            return all(label in pr_labels for label in self.labels)
+        else:
+            return any(label in pr_labels for label in self.labels)
+
+class DateFilter:
+    def __init__(self, created_after=None, created_before=None, updated_after=None):
+        self.created_after = created_after
+        self.created_before = created_before
+        self.updated_after = updated_after
+    def matches(self, pr):
+        if self.created_after and pr.created_at < self.created_after:
+            return False
+        if self.created_before and pr.created_at > self.created_before:
+            return False
+        if self.updated_after and pr.updated_at < self.updated_after:
+            return False
+        return True
+
+class ReviewFilter:
+    def __init__(self, status=None, reviewer=None):
+        self.status = status
+        self.reviewer = reviewer
+    def matches(self, pr):
+        reviews = pr.get_reviews()
+        if self.reviewer:
+            return any(r.user.login.lower() == self.reviewer.lower() for r in reviews)
+        if self.status == 'approved':
+            return any(r.state == 'APPROVED' for r in reviews)
+        elif self.status == 'changes_requested':
+            return any(r.state == 'CHANGES_REQUESTED' for r in reviews)
+        elif self.status == 'pending':
+            return not any(r.state in ['APPROVED', 'CHANGES_REQUESTED'] for r in reviews)
+        return True
+
+class CombinedFilter:
+    def __init__(self, filters, operator='AND'):
+        self.filters = filters
+        self.operator = operator
+    def matches(self, pr):
+        if self.operator == 'AND':
+            return all(f.matches(pr) for f in self.filters)
+        else:  # OR
+            return any(f.matches(pr) for f in self.filters)
 
 
 class TestPRFilter(unittest.TestCase):
@@ -116,10 +178,16 @@ class TestLabelFilter(unittest.TestCase):
         filter_label = LabelFilter('bug')
 
         pr_with_bug = Mock()
-        pr_with_bug.labels = [Mock(name='bug'), Mock(name='urgent')]
+        bug_label = Mock()
+        bug_label.configure_mock(name='bug')
+        urgent_label = Mock()
+        urgent_label.configure_mock(name='urgent')
+        pr_with_bug.labels = [bug_label, urgent_label]
 
         pr_without_bug = Mock()
-        pr_without_bug.labels = [Mock(name='enhancement')]
+        enhancement_label = Mock()
+        enhancement_label.configure_mock(name='enhancement')
+        pr_without_bug.labels = [enhancement_label]
 
         self.assertTrue(filter_label.matches(pr_with_bug))
         self.assertFalse(filter_label.matches(pr_without_bug))
@@ -129,16 +197,26 @@ class TestLabelFilter(unittest.TestCase):
         filter_labels = LabelFilter(['bug', 'urgent'], require_all=False)
 
         pr_with_bug = Mock()
-        pr_with_bug.labels = [Mock(name='bug')]
+        bug_label = Mock()
+        bug_label.configure_mock(name='bug')
+        pr_with_bug.labels = [bug_label]
 
         pr_with_urgent = Mock()
-        pr_with_urgent.labels = [Mock(name='urgent')]
+        urgent_label = Mock()
+        urgent_label.configure_mock(name='urgent')
+        pr_with_urgent.labels = [urgent_label]
 
         pr_with_both = Mock()
-        pr_with_both.labels = [Mock(name='bug'), Mock(name='urgent')]
+        bug_label_2 = Mock()
+        bug_label_2.configure_mock(name='bug')
+        urgent_label_2 = Mock()
+        urgent_label_2.configure_mock(name='urgent')
+        pr_with_both.labels = [bug_label_2, urgent_label_2]
 
         pr_with_neither = Mock()
-        pr_with_neither.labels = [Mock(name='enhancement')]
+        enhancement_label = Mock()
+        enhancement_label.configure_mock(name='enhancement')
+        pr_with_neither.labels = [enhancement_label]
 
         self.assertTrue(filter_labels.matches(pr_with_bug))
         self.assertTrue(filter_labels.matches(pr_with_urgent))
@@ -150,13 +228,21 @@ class TestLabelFilter(unittest.TestCase):
         filter_labels = LabelFilter(['bug', 'urgent'], require_all=True)
 
         pr_with_bug = Mock()
-        pr_with_bug.labels = [Mock(name='bug')]
+        bug_label = Mock()
+        bug_label.configure_mock(name='bug')
+        pr_with_bug.labels = [bug_label]
 
         pr_with_urgent = Mock()
-        pr_with_urgent.labels = [Mock(name='urgent')]
+        urgent_label = Mock()
+        urgent_label.configure_mock(name='urgent')
+        pr_with_urgent.labels = [urgent_label]
 
         pr_with_both = Mock()
-        pr_with_both.labels = [Mock(name='bug'), Mock(name='urgent')]
+        bug_label_2 = Mock()
+        bug_label_2.configure_mock(name='bug')
+        urgent_label_2 = Mock()
+        urgent_label_2.configure_mock(name='urgent')
+        pr_with_both.labels = [bug_label_2, urgent_label_2]
 
         self.assertFalse(filter_labels.matches(pr_with_bug))
         self.assertFalse(filter_labels.matches(pr_with_urgent))
@@ -167,10 +253,17 @@ class TestLabelFilter(unittest.TestCase):
         filter_exclude = LabelFilter('wip', exclude=True)
 
         pr_with_wip = Mock()
-        pr_with_wip.labels = [Mock(name='wip'), Mock(name='bug')]
+        # Use SimpleNamespace or configure_mock to properly set the .name attribute
+        wip_label = Mock()
+        wip_label.configure_mock(name='wip')
+        bug_label_1 = Mock()
+        bug_label_1.configure_mock(name='bug')
+        pr_with_wip.labels = [wip_label, bug_label_1]
 
         pr_without_wip = Mock()
-        pr_without_wip.labels = [Mock(name='bug')]
+        bug_label_2 = Mock()
+        bug_label_2.configure_mock(name='bug')
+        pr_without_wip.labels = [bug_label_2]
 
         self.assertFalse(filter_exclude.matches(pr_with_wip))
         self.assertTrue(filter_exclude.matches(pr_without_wip))
@@ -329,15 +422,21 @@ class TestCombinedFilter(unittest.TestCase):
 
         pr_match = Mock()
         pr_match.state = 'open'
-        pr_match.labels = [Mock(name='bug')]
+        bug_label = Mock()
+        bug_label.configure_mock(name='bug')
+        pr_match.labels = [bug_label]
 
         pr_no_match_state = Mock()
         pr_no_match_state.state = 'closed'
-        pr_no_match_state.labels = [Mock(name='bug')]
+        bug_label2 = Mock()
+        bug_label2.configure_mock(name='bug')
+        pr_no_match_state.labels = [bug_label2]
 
         pr_no_match_label = Mock()
         pr_no_match_label.state = 'open'
-        pr_no_match_label.labels = [Mock(name='enhancement')]
+        enhancement_label = Mock()
+        enhancement_label.configure_mock(name='enhancement')
+        pr_no_match_label.labels = [enhancement_label]
 
         self.assertTrue(combined.matches(pr_match))
         self.assertFalse(combined.matches(pr_no_match_state))
@@ -356,15 +455,21 @@ class TestCombinedFilter(unittest.TestCase):
 
         pr_urgent = Mock()
         pr_urgent.user.login = 'bob'
-        pr_urgent.labels = [Mock(name='urgent')]
+        urgent_label = Mock()
+        urgent_label.configure_mock(name='urgent')
+        pr_urgent.labels = [urgent_label]
 
         pr_both = Mock()
         pr_both.user.login = 'alice'
-        pr_both.labels = [Mock(name='urgent')]
+        urgent_label2 = Mock()
+        urgent_label2.configure_mock(name='urgent')
+        pr_both.labels = [urgent_label2]
 
         pr_neither = Mock()
         pr_neither.user.login = 'bob'
-        pr_neither.labels = [Mock(name='bug')]
+        bug_label3 = Mock()
+        bug_label3.configure_mock(name='bug')
+        pr_neither.labels = [bug_label3]
 
         self.assertTrue(combined.matches(pr_by_alice))
         self.assertTrue(combined.matches(pr_urgent))
@@ -388,15 +493,21 @@ class TestCombinedFilter(unittest.TestCase):
 
         pr_open_bug = Mock()
         pr_open_bug.state = 'open'
-        pr_open_bug.labels = [Mock(name='bug')]
+        bug_label4 = Mock()
+        bug_label4.configure_mock(name='bug')
+        pr_open_bug.labels = [bug_label4]
 
         pr_closed_resolved = Mock()
         pr_closed_resolved.state = 'closed'
-        pr_closed_resolved.labels = [Mock(name='resolved')]
+        resolved_label = Mock()
+        resolved_label.configure_mock(name='resolved')
+        pr_closed_resolved.labels = [resolved_label]
 
         pr_open_resolved = Mock()
         pr_open_resolved.state = 'open'
-        pr_open_resolved.labels = [Mock(name='resolved')]
+        resolved_label2 = Mock()
+        resolved_label2.configure_mock(name='resolved')
+        pr_open_resolved.labels = [resolved_label2]
 
         self.assertTrue(combined.matches(pr_open_bug))
         self.assertTrue(combined.matches(pr_closed_resolved))

@@ -5,6 +5,7 @@ Provides cross-platform desktop notifications with fallback
 to terminal notifications if desktop support is unavailable.
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -202,14 +203,28 @@ class NotificationManager:
             if self.config.sound:
                 script += ' sound name "default"'
 
-            result = subprocess.run(
-                ['osascript', '-e', script],
-                capture_output=True,
-                text=True,
-                timeout=5
+            # Use async subprocess to avoid blocking the event loop
+            process = await asyncio.create_subprocess_exec(
+                'osascript', '-e', script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
 
-            return result.returncode == 0
+            try:
+                # Wait for process with timeout
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=5.0
+                )
+
+                return process.returncode == 0
+
+            except asyncio.TimeoutError:
+                # Kill process if timeout
+                process.kill()
+                await process.wait()
+                logger.debug("macOS notification timed out")
+                return False
 
         except Exception as e:
             logger.debug(f"macOS notification failed: {e}")

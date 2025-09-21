@@ -9,6 +9,7 @@ import asyncio
 import json
 import hmac
 import hashlib
+from unittest import IsolatedAsyncioTestCase
 from unittest.mock import Mock, patch, AsyncMock
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
@@ -89,6 +90,21 @@ class TestWebhookIntegration(AioHTTPTestCase):
         )
 
         self.assertEqual(resp.status, 200)
+
+        # Poll for handler completion since it runs in a background task
+        timeout = 2.0  # 2 second timeout
+        poll_interval = 0.05  # 50ms poll interval
+        elapsed = 0.0
+
+        while elapsed < timeout:
+            if self.test_handler_called:
+                break
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+        # Fail if timeout elapsed without handler being called
+        if not self.test_handler_called:
+            self.fail(f"Handler was not called within {timeout} seconds")
 
         # Verify handler was called
         self.assertTrue(self.test_handler_called)
@@ -187,7 +203,7 @@ class TestWebhookIntegration(AioHTTPTestCase):
         self.assertTrue(handler2_called)
 
 
-class TestWebhookEventFlow(unittest.TestCase):
+class TestWebhookEventFlow(IsolatedAsyncioTestCase):
     """Test complete webhook event flow."""
 
     def setUp(self):

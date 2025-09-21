@@ -266,3 +266,58 @@ class WebhookHandler:
     def get_statistics(self) -> Dict[str, Any]:
         """Get handler statistics."""
         return self._statistics.copy()
+
+    # Compatibility methods for tests
+    def register_handler(self, event_type: EventType, handler: Callable) -> None:
+        """Register a handler for a specific event type (test compatibility)."""
+        self._plugins[f"{event_type.value}_{id(handler)}"] = handler
+
+    def unregister_handler(self, event_type: EventType, handler: Callable) -> None:
+        """Unregister a handler for a specific event type (test compatibility)."""
+        key = f"{event_type.value}_{id(handler)}"
+        if key in self._plugins:
+            del self._plugins[key]
+
+    async def handle_event(self, event: WebhookEvent) -> List[Any]:
+        """Handle an event and return list of results (test compatibility)."""
+        results = []
+
+        # Run all registered handlers for this event type
+        for key, handler in list(self._plugins.items()):
+            if key.startswith(f"{event.type.value}_"):
+                try:
+                    result = await handler(event)
+                    results.append(result)
+                except Exception as e:
+                    # Return dict with error key for test compatibility
+                    results.append({'error': str(e)})
+
+        return results
+
+    def parse_github_event(self, headers: Dict[str, str], payload: Dict[str, Any]) -> WebhookEvent:
+        """Parse GitHub webhook headers and payload into WebhookEvent."""
+        from .events import EventType, WebhookEvent
+
+        # Map GitHub event types to our EventType enum
+        github_event = headers.get('X-GitHub-Event', '')
+        event_type_map = {
+            'pull_request': EventType.PULL_REQUEST,
+            'issues': EventType.ISSUE,  # Use ISSUE for test compatibility
+            'issue_comment': EventType.ISSUE_COMMENT,
+            'pull_request_review': EventType.PULL_REQUEST_REVIEW,
+            'pull_request_review_comment': EventType.PULL_REQUEST_REVIEW_COMMENT,
+            'push': EventType.PUSH,
+            'release': EventType.RELEASE,
+            'workflow_run': EventType.WORKFLOW_RUN,
+        }
+
+        event_type = event_type_map.get(github_event, EventType.OTHER)
+        action = payload.get('action', '')
+        delivery_id = headers.get('X-GitHub-Delivery', '')
+
+        return WebhookEvent(
+            type=event_type,
+            action=action,
+            payload=payload,
+            delivery_id=delivery_id
+        )

@@ -198,7 +198,7 @@ class TestTokenManagerReliability:
         # Clear GH_TOKEN to test GITHUB_TOKEN fallback
         with patch.dict('os.environ', {}, clear=True):
             with patch.dict('os.environ', {'GITHUB_TOKEN': 'ghp_github_env_token_123456789'}):
-                token_manager = TokenManager(token="dummy")  # noqa: S106
+                token_manager = TokenManager()  # Test fallback path without explicit token
                 assert token_manager.get_token() == "ghp_github_env_token_123456789"
 
     @patch.dict('os.environ', {}, clear=True)
@@ -207,7 +207,7 @@ class TestTokenManagerReliability:
         """Test TokenManager fallback to gh CLI."""
         mock_gh_cli.return_value = "ghp_cli_token_123456789"
 
-        token_manager = TokenManager(token="dummy")  # noqa: S106
+        token_manager = TokenManager()  # Test fallback path without explicit token
         assert token_manager.get_token() == "ghp_cli_token_123456789"
 
     @patch.dict('os.environ', {}, clear=True)
@@ -217,7 +217,7 @@ class TestTokenManagerReliability:
         mock_gh_cli.return_value = None
 
         with pytest.raises(ValueError, match="No GitHub token found"):
-            TokenManager(token="dummy")  # noqa: S106
+            TokenManager()  # Test fallback path without explicit token
 
     def test_token_manager_token_precedence(self):
         """Test that token sources are checked in correct precedence order."""
@@ -232,7 +232,7 @@ class TestTokenManagerReliability:
     @patch.dict('os.environ', {'GH_TOKEN': 'ghp_gh_token', 'GITHUB_TOKEN': 'ghp_github_token'})
     def test_gh_token_precedence_over_github_token(self):
         """Test that GH_TOKEN takes precedence over GITHUB_TOKEN."""
-        token_manager = TokenManager(token="dummy")  # noqa: S106
+        token_manager = TokenManager()  # Test fallback path without explicit token
         assert token_manager.get_token() == "ghp_gh_token"
 
     @patch('gh_pr.auth.token.Github')

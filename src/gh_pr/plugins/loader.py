@@ -8,6 +8,7 @@ with dependency validation.
 import importlib
 import importlib.util
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Set
@@ -17,6 +18,26 @@ import tomllib
 from .base import Plugin, PluginMetadata, PluginContext
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_module_name(name: str) -> str:
+    """
+    Sanitize plugin name for use as a Python module name.
+
+    Replaces hyphens with underscores and removes other invalid characters.
+
+    Args:
+        name: Original plugin name
+
+    Returns:
+        Sanitized module name safe for Python imports
+    """
+    # Replace hyphens with underscores and remove non-alphanumeric chars
+    safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    # Ensure it doesn't start with a digit
+    if safe_name and safe_name[0].isdigit():
+        safe_name = '_' + safe_name
+    return safe_name
 
 # Default plugin search paths
 DEFAULT_PLUGIN_PATHS = [
@@ -223,8 +244,10 @@ class PluginLoader:
         if not main_file.exists():
             raise FileNotFoundError(f"No plugin.py or __init__.py found in {path}")
 
+        # Sanitize the plugin name for use as a module name
+        safe_module_name = sanitize_module_name(name)
         # Use package name for proper imports without modifying sys.path
-        package_name = f"{name}.{main_file.stem}" if main_file.name == 'plugin.py' else name
+        package_name = f"{safe_module_name}.{main_file.stem}" if main_file.name == 'plugin.py' else safe_module_name
         return self._load_python_plugin(package_name, main_file)
 
     def load_all_plugins(self) -> Dict[str, Plugin]:
