@@ -1,9 +1,10 @@
 """GitHub token management and validation."""
 
+import hashlib
 import logging
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from github import Github, GithubException
@@ -20,16 +21,30 @@ GH_CLI_AUTH_TOKEN_CMD = ["gh", "auth", "token"]
 class TokenManager:
     """Manages GitHub authentication tokens."""
 
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: Optional[str] = None, config_manager=None):
         """
         Initialize TokenManager.
 
         Args:
             token: GitHub token. If not provided, will try to get from environment.
+            config_manager: Optional config manager for token storage.
         """
+        self.config_manager = config_manager
         self.token = self._get_token(token)
         self._github: Optional[Github] = None
         self._token_info: Optional[dict[str, Any]] = None
+        self._expiration_info: Optional[dict[str, Any]] = None
+
+    def _get_token_key(self) -> str:
+        """
+        Get consistent token key for config storage.
+
+        Returns:
+            SHA-256 hash of token truncated to 16 hex characters (64 bits).
+            This provides sufficient uniqueness for typical use cases while
+            avoiding storing raw token material.
+        """
+        return hashlib.sha256(self.token.encode()).hexdigest()[:16]
 
     def _get_token(self, token: Optional[str] = None) -> str:
         """
@@ -39,7 +54,8 @@ class TokenManager:
         1. Provided token parameter
         2. GH_TOKEN environment variable
         3. GITHUB_TOKEN environment variable
-        4. gh CLI configuration
+        4. Configuration file
+        5. gh CLI configuration
 
         Args:
             token: Optional token string
@@ -58,12 +74,18 @@ class TokenManager:
             if env_token := os.environ.get(env_var):
                 return env_token
 
+        # Try configuration file
+        if self.config_manager:
+            for key in ("github.token", "github.default_token"):
+                if config_token := self.config_manager.get(key):
+                    return config_token
+        # Try gh CLI
         if gh_token := self._get_gh_cli_token():
             return gh_token
 
         raise ValueError(
             "No GitHub token found. Please provide a token via --token, "
-            "GH_TOKEN/GITHUB_TOKEN environment variable, or configure gh CLI"
+            "GH_TOKEN/GITHUB_TOKEN environment variable, config file, or configure gh CLI"
         )
 
     def _get_gh_cli_token(self) -> Optional[str]:
@@ -76,11 +98,16 @@ class TokenManager:
         try:
             # Try to get auth status from gh CLI
             # Security: GH_CLI_AUTH_STATUS_CMD is a hardcoded constant list, not user input
+            # Safe because:
+            # 1. Command is a predefined list constant, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Has timeout to prevent hanging
             result = subprocess.run(
                 GH_CLI_AUTH_STATUS_CMD,  # Static constant: ["gh", "auth", "status", "--show-token"]
                 capture_output=True,
                 text=True,
-                timeout=SUBPROCESS_TIMEOUT
+                timeout=SUBPROCESS_TIMEOUT,
+                check=False  # Explicitly don't raise on non-zero exit
             )
 
             # Parse token from output
@@ -90,11 +117,16 @@ class TokenManager:
 
             # Alternative: try to get token from gh config
             # Security: GH_CLI_AUTH_TOKEN_CMD is a hardcoded constant list, not user input
+            # Safe because:
+            # 1. Command is a predefined list constant, not user input
+            # 2. No shell=True (list form prevents injection)
+            # 3. Has timeout to prevent hanging
             result = subprocess.run(
                 GH_CLI_AUTH_TOKEN_CMD,  # Static constant: ["gh", "auth", "token"]
                 capture_output=True,
                 text=True,
-                timeout=SUBPROCESS_TIMEOUT
+                timeout=SUBPROCESS_TIMEOUT,
+                check=False  # Explicitly don't raise on non-zero exit
             )
 
             if result.returncode == 0 and result.stdout.strip():
@@ -133,7 +165,7 @@ class TokenManager:
             user = github.get_user()
             _ = user.login  # Force API call
             return True
-        except GithubException:
+        except (GithubException, Exception):
             return False
 
     def get_token_info(self) -> Optional[dict[str, Any]]:
@@ -167,12 +199,22 @@ class TokenManager:
             }
 
             # Try to get rate limit info (works for all valid tokens)
-            rate_limit = github.get_rate_limit()
-            info["rate_limit"] = {
-                "limit": rate_limit.core.limit,
-                "remaining": rate_limit.core.remaining,
-                "reset": rate_limit.core.reset.isoformat() if rate_limit.core.reset else None,
-            }
+            try:
+                rate_limit = github.get_rate_limit()
+                core = rate_limit.core
+                info["rate_limit"] = {
+                    "limit": getattr(core, "limit", "N/A"),
+                    "remaining": getattr(core, "remaining", "N/A"),
+                    "reset": datetime.fromtimestamp(core.reset.timestamp(), timezone.utc).isoformat() if getattr(core, "reset", None) else None,
+                }
+            except (GithubException, KeyError, AttributeError) as e:
+                # Fallback if rate limit API changes or data is missing
+                logger.warning(f"Could not retrieve rate limit info: {e}")
+                info["rate_limit"] = {
+                    "limit": "N/A",
+                    "remaining": "N/A",
+                    "reset": None,
+                }
 
             # Try to get scopes (only for OAuth/PAT tokens)
             # Note: PyGithub doesn't provide a public API for token scopes.
@@ -181,11 +223,17 @@ class TokenManager:
             info["scopes"] = []  # Unable to determine scopes without private attribute access
 
             # Check token expiration for fine-grained tokens
-            if token_type == "Fine-grained Personal Access Token":
-                # Fine-grained tokens have expiration
-                # GitHub API doesn't directly expose token expiry
-                # In real implementation, you might store this when token is created
-                pass
+            if token_type == "Fine-grained Personal Access Token" and self.config_manager:
+                    token_key = self._get_token_key()
+                    stored_expiry = self.config_manager.get(f"tokens.{token_key}.expires_at")
+                    if stored_expiry:
+                        info["expires_at"] = stored_expiry
+                        # Handle Z suffix in ISO format (replace with +00:00 for fromisoformat compatibility)
+                        expiry_str = stored_expiry.replace('Z', '+00:00') if stored_expiry.endswith('Z') else stored_expiry
+                        expires_dt = datetime.fromisoformat(expiry_str)
+                        now = datetime.now(timezone.utc)
+                        days_remaining = (expires_dt - now).days
+                        info["days_remaining"] = days_remaining
 
             self._token_info = info
             return info
@@ -295,17 +343,68 @@ class TokenManager:
         Returns:
             Dictionary with expiration info or None
         """
+        # Return cached expiration info if available
+        if self._expiration_info:
+            return self._expiration_info
+
         info = self.get_token_info()
-        if not info or not info.get("expires_at"):
+        if not info:
             return None
 
-        expires_at = datetime.fromisoformat(info["expires_at"])
+        # Check for stored expiration or estimated expiration
+        expires_at_str = info.get("expires_at")
+
+        # For GitHub App tokens, they typically expire after 1 hour
+        if info.get("type") == "GitHub App Installation Token":
+            # Estimate 1 hour from now (conservative estimate)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+            expires_at_str = expires_at.isoformat()
+
+        if not expires_at_str:
+            return None
+
+        expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
         now = datetime.now(timezone.utc)
         days_remaining = (expires_at - now).days
+        hours_remaining = int((expires_at - now).total_seconds() / 3600)
 
-        return {
-            "expired": days_remaining <= 0,
+        self._expiration_info = {
+            "expired": expires_at <= now,
             "expires_at": expires_at.isoformat(),
             "days_remaining": days_remaining,
+            "hours_remaining": hours_remaining,
             "warning": days_remaining <= 7,  # Warn if expiring within a week
         }
+
+        return self._expiration_info
+
+    def store_token_metadata(self, expires_at: Optional[str] = None) -> bool:
+        """
+        Store token metadata in configuration.
+
+        Args:
+            expires_at: Optional expiration date in ISO format
+
+        Returns:
+            True if stored successfully
+        """
+        if not self.config_manager:
+            return False
+
+        try:
+            # Store token metadata using consistent token key
+            token_key = self._get_token_key()
+
+            metadata = {
+                "type": self.get_token_info().get("type", "Unknown"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+            if expires_at:
+                metadata["expires_at"] = expires_at
+
+            self.config_manager.set(f"tokens.{token_key}", metadata)
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to store token metadata: {e}")
+            return False

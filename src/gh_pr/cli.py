@@ -3,9 +3,12 @@
 
 import sys
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import click
+from github import GithubException
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -32,6 +35,7 @@ class CLIConfig:
     interactive: bool = False
     repo: Optional[str] = None
     token: Optional[str] = None
+    token_info: bool = False
     show_all: bool = False
     resolved_active: bool = False
     unresolved_outdated: bool = False
@@ -66,6 +70,9 @@ class CLIConfig:
 )
 @click.option(
     "--token", help="GitHub token (can also use GH_TOKEN or GITHUB_TOKEN env vars)", metavar="TOKEN"
+)
+@click.option(
+    "--token-info", is_flag=True, help="Display detailed token information and exit"
 )
 @click.option(
     "-a", "--all", "show_all", is_flag=True, help="Show all comments, not just unresolved"
@@ -147,6 +154,7 @@ def main(**kwargs) -> None:
         gh-pr --batch                # Batch mode for multiple PRs
         gh-pr --batch-file prs.txt   # Process PRs from file
         gh-pr --batch --resolve-outdated  # Batch resolve outdated comments
+        gh-pr --token-info           # Display detailed token information
     """
     # Create config from kwargs
     cfg = CLIConfig(**kwargs)
@@ -160,8 +168,14 @@ def main(**kwargs) -> None:
             return  # Cache was cleared
         config_manager, cache_manager, token_manager = result
 
-        # Display token info
+        # Handle --token-info flag
+        if cfg.token_info:
+            _display_detailed_token_info(token_manager)
+            return
+
+        # Display token info and check expiration
         _display_token_info(token_manager, cfg.verbose)
+        _check_token_expiration(token_manager)
 
         # Check automation permissions
         _check_automation_permissions(token_manager, cfg.resolve_outdated, cfg.accept_suggestions)
@@ -252,7 +266,7 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
         console.print("[green]✓ Cache cleared successfully[/green]")
         return None, None, None
 
-    token_manager = TokenManager(token=token)
+    token_manager = TokenManager(token=token, config_manager=config_manager)
 
     if not token_manager.validate_token():
         console.print("[red]✗ Invalid or expired GitHub token[/red]")
@@ -419,14 +433,129 @@ def _display_token_info(token_manager: TokenManager, verbose: bool):
 
     token_info = token_manager.get_token_info()
     if token_info:
+        # Check expiration status
+        expiration = token_manager.check_expiration()
+        expires_text = "Never"
+        days_text = "N/A"
+
+        if expiration:
+            expires_text = expiration['expires_at']
+            days_remaining = expiration['days_remaining']
+            if expiration['expired']:
+                days_text = "[red]EXPIRED[/red]"
+            elif expiration['warning']:
+                days_text = f"[yellow]{days_remaining} days (expiring soon)[/yellow]"
+            else:
+                days_text = f"[green]{days_remaining} days[/green]"
+
         console.print(Panel(
             f"Token: {token_info['type']}\n"
-            f"Scopes: {', '.join(token_info.get('scopes', []))}\n"
-            f"Expires: {token_info.get('expires_at', 'Never')}\n"
-            f"Days remaining: {token_info.get('days_remaining', 'N/A')}",
+            f"Rate Limit: {token_info.get('rate_limit', {}).get('remaining', 'N/A')} / "
+            f"{token_info.get('rate_limit', {}).get('limit', 'N/A')}\n"
+            f"Expires: {expires_text}\n"
+            f"Days remaining: {days_text}",
             title="Token Information",
             border_style="blue"
         ))
+
+
+def _display_detailed_token_info(token_manager: TokenManager):
+    """Display detailed token information."""
+    console.print("\n[bold]GitHub Token Information[/bold]\n")
+
+    # Validate token first
+    if not token_manager.validate_token():
+        console.print("[red]✗ Token is invalid or expired[/red]")
+        sys.exit(1)
+
+    token_info = token_manager.get_token_info()
+    if not token_info:
+        console.print("[yellow]⚠ Unable to retrieve token information[/yellow]")
+        sys.exit(1)
+
+    # Display token type
+    token_type = token_info['type']
+    console.print(f"[bold]Token Type:[/bold] {token_type}")
+
+    # Display scopes (if available)
+    scopes = token_info.get('scopes', [])
+    if scopes:
+        console.print(f"[bold]Scopes:[/bold] {', '.join(scopes)}")
+    else:
+        console.print("[bold]Scopes:[/bold] [dim]Unable to determine (may be fine-grained token)[/dim]")
+
+    # Display rate limit info
+    rate_limit = token_info.get('rate_limit', {})
+    if rate_limit:
+        remaining = rate_limit.get('remaining', 'N/A')
+        limit = rate_limit.get('limit', 'N/A')
+        reset_time = rate_limit.get('reset', 'N/A')
+
+        console.print("\n[bold]Rate Limit:[/bold]")
+        console.print(f"  Remaining: {remaining} / {limit}")
+        if reset_time and reset_time != 'N/A':
+            try:
+                reset_dt = datetime.fromisoformat(reset_time.replace('Z', '+00:00'))
+                console.print(f"  Resets: {reset_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            except (ValueError, AttributeError) as e:
+                # Log parsing issue but continue gracefully
+                console.print(f"  [dim]Reset time unavailable[/dim]")
+
+    # Display expiration info
+    expiration = token_manager.check_expiration()
+    if expiration:
+        console.print("\n[bold]Expiration:[/bold]")
+        expires_at = expiration['expires_at']
+        days_remaining = expiration['days_remaining']
+
+        # Accept both 'Z' and offset forms
+        expires_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+        console.print(f"  Expires: {expires_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        if expiration['expired']:
+            console.print("  Status: [red]✗ EXPIRED[/red]")
+        elif expiration['warning']:
+            console.print(f"  Status: [yellow]⚠ Expiring in {days_remaining} days[/yellow]")
+        else:
+            console.print(f"  Status: [green]✓ Valid for {days_remaining} more days[/green]")
+    else:
+        console.print("\n[bold]Expiration:[/bold] No expiration (token does not expire)")
+
+    # Test repository access
+    console.print("\n[bold]Testing Permissions:[/bold]")
+    try:
+        github = token_manager.get_github_client()
+        user = github.get_user()
+        console.print(f"  Authenticated as: {user.login}")
+
+        # Check basic permissions
+        permissions_to_check = [
+            ("repo", "Repository access"),
+            ("write:discussion", "Discussion write access"),
+            ("read:org", "Organization read access")
+        ]
+
+        console.print("\n[bold]Permission Check:[/bold]")
+        for scope, description in permissions_to_check:
+            has_perm = token_manager.has_permissions([scope])
+            status = "[green]✓[/green]" if has_perm else "[red]✗[/red]"
+            console.print(f"  {status} {description}")
+
+    except GithubException as e:
+        console.print(f"[red]Error testing permissions: {e}[/red]")
+
+    console.print()  # Empty line at the end
+
+
+def _check_token_expiration(token_manager: TokenManager):
+    """Check and warn about token expiration."""
+    if expiration := token_manager.check_expiration():
+        if expiration['expired']:
+            console.print("[red]⚠ Your GitHub token has EXPIRED! Please generate a new token.[/red]")
+            if not click.confirm("Continue anyway?"):
+                sys.exit(1)
+        elif expiration['warning']:
+            days = expiration['days_remaining']
+            console.print(f"[yellow]⚠ Your GitHub token expires in {days} days. Consider renewing it soon.[/yellow]")
 
 
 def _check_automation_permissions(token_manager: TokenManager, resolve_outdated: bool, accept_suggestions: bool):
@@ -549,7 +678,8 @@ def _handle_output(
         console.print(f"[green]✓ Exported to {output_file}[/green]")
 
     if copy:
-        clipboard = ClipboardManager()
+        clipboard_timeout = cfg.get("clipboard.timeout_seconds", 5.0)
+        clipboard = ClipboardManager(timeout=clipboard_timeout)
         plain_output = display_manager.generate_plain_output(pr_data, comments, summary)
         if clipboard.copy(plain_output):
             console.print("[green]✓ Copied to clipboard (plain text)[/green]")

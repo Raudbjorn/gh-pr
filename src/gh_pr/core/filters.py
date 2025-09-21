@@ -163,9 +163,10 @@ class CommentFilter:
             else:
                 stats["unresolved"] += 1
 
-            if not thread.get("is_outdated", False):
-                stats["active"] += 1
-            else:
+            # Use XOR logic - threads are either outdated OR active
+            if thread.get("is_outdated", False):
                 stats["outdated"] += 1
+            else:
+                stats["active"] += 1
 
         return stats

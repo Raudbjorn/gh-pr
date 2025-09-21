@@ -76,6 +76,7 @@ class ConfigManager:
         },
         "clipboard": {
             "auto_strip_ansi": True,
+            "timeout_seconds": 5.0,
         },
     }
 
@@ -139,9 +140,16 @@ class ConfigManager:
         """
         Recursively merge configuration dictionaries.
 
+        Algorithm:
+            1. Iterate through each key-value pair in the update dictionary
+            2. If key exists in base AND both values are dictionaries: recurse
+            3. Otherwise: overwrite base[key] with update[key]
+
+        This preserves the deep structure while allowing selective overwrites.
+
         Args:
-            base: Base configuration
-            update: Update configuration
+            base: Base configuration dictionary (modified in place)
+            update: Update configuration dictionary (values to merge in)
         """
         for key, value in update.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
@@ -189,6 +197,33 @@ class ConfigManager:
 
         config[keys[-1]] = value
 
+    def delete(self, key: str) -> None:
+        """
+        Delete configuration value.
+
+        Args:
+            key: Configuration key (dot-separated)
+        """
+        keys = key.split(".")
+
+        # Handle single key (top-level)
+        if len(keys) == 1:
+            if keys[0] in self.config:
+                del self.config[keys[0]]
+            return
+
+        # Navigate to parent of the key to delete
+        config = self.config
+        for k in keys[:-1]:
+            if not isinstance(config, dict) or k not in config:
+                # Key doesn't exist, nothing to delete
+                return
+            config = config[k]
+
+        # Delete the final key if it exists
+        if isinstance(config, dict) and keys[-1] in config:
+            del config[keys[-1]]
+
     def save(self, path: Optional[str] = None) -> bool:
         """
         Save configuration to file.
@@ -216,3 +251,93 @@ class ConfigManager:
         except (OSError, PermissionError, TypeError) as e:
             logger.debug(f"Failed to save config to {save_path}: {e}")
             return False
+
+    def get_all(self) -> dict[str, Any]:
+        """
+        Get entire configuration.
+
+        Returns:
+            Configuration dictionary
+        """
+        return self.config.copy()
+
+    def update_section(self, section: str, values: dict[str, Any]) -> None:
+        """
+        Update entire configuration section.
+
+        Args:
+            section: Section name
+            values: New section values
+        """
+        self.config[section] = values
+
+    def has(self, key: str) -> bool:
+        """
+        Check if configuration key exists.
+
+        Args:
+            key: Configuration key (dot-separated)
+
+        Returns:
+            True if key exists
+        """
+        keys = key.split(".")
+        value = self.config
+
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return False
+
+        return True
+
+    def reset_to_defaults(self, defaults: dict[str, Any]) -> None:
+        """
+        Reset configuration to provided defaults.
+
+        Args:
+            defaults: Default configuration
+        """
+        self.config = defaults.copy()
+
+    def merge(self, additional_config: dict[str, Any]) -> None:
+        """
+        Merge additional configuration into the current configuration.
+
+        This method performs a deep merge of configuration dictionaries:
+        - For nested dictionaries: Merges recursively, preserving existing keys
+        - For scalar values: New values completely replace existing values
+        - For new keys: Adds them to the configuration
+        - Modifies the existing configuration in place
+
+        Merge Behavior Examples:
+            Base config: {"github": {"token": "old", "check_expiry": True}}
+            Additional: {"github": {"token": "new"}, "cache": {"enabled": False}}
+            Result: {"github": {"token": "new", "check_expiry": True}, "cache": {"enabled": False}}
+
+            Base config: {"display": {"theme": "dark", "lines": 5}}
+            Additional: {"display": {"theme": "light"}}
+            Result: {"display": {"theme": "light", "lines": 5}}
+
+        Use Cases:
+            - Runtime configuration overrides from CLI arguments
+            - User-specific configuration layered over defaults
+            - Dynamic configuration updates during execution
+            - Token metadata storage (adds new token entries without affecting others)
+
+        Note:
+            This method modifies the existing configuration in place.
+            The merge is recursive for nested dictionaries. Values from
+            additional_config will override existing values with the same key.
+
+        Args:
+            additional_config: Configuration dictionary to merge into current config.
+                              Must be a valid dictionary structure matching config schema.
+
+        Raises:
+            TypeError: If additional_config is not a dictionary or contains invalid types
+        """
+        if not isinstance(additional_config, dict):
+            raise TypeError("additional_config must be a dictionary")
+        self._merge_config(self.config, additional_config)

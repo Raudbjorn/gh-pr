@@ -28,11 +28,11 @@ class TestEndToEndSecurityIntegration:
             # Mock successful but slow gh CLI
             mock_result = Mock()
             mock_result.returncode = 0
-            mock_result.stdout = "Token: ghp_test_token_123456789"
+            mock_result.stdout = "Token: ghp_FAKE_TEST_TOKEN_REPLACED"
             mock_run.return_value = mock_result
 
             token_manager = TokenManager()
-            assert token_manager.get_token() == "ghp_test_token_123456789"
+            assert token_manager.get_token() == "ghp_FAKE_TEST_TOKEN_REPLACED"
 
             # Verify timeout was applied
             call_args = mock_run.call_args_list[0]
