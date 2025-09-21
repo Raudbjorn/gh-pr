@@ -491,8 +491,7 @@ class MultiRepoManager:
                     continue
 
                 repo_client = self._get_repo_client(repo_config)
-                pr = repo_client.get_pull(pr_num)
-
+                pr = await asyncio.to_thread(repo_client.get_pull, pr_num)
                 # Add node
                 graph['nodes'].append({
                     'id': pr_key,
