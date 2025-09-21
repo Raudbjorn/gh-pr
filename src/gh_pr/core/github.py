@@ -86,7 +86,7 @@ class GitHubClient:
             return 0
 
     def get_open_prs(
-        self, owner: str, repo: str, limit: int = 30
+        self, owner: str, repo: str, limit: int = 30, include_mergeable: bool = False
     ) -> list[dict[str, Any]]:
         """
         Get list of open PRs in a repository.
@@ -95,24 +95,35 @@ class GitHubClient:
             owner: Repository owner
             repo: Repository name
             limit: Maximum number of PRs to return
+            include_mergeable: Whether to include mergeable status (causes extra API calls)
 
         Returns:
             List of PR dictionaries
         """
         repository = self.get_repository(owner, repo)
 
-        return [{
-            "number": pr.number,
-            "title": pr.title,
-            "author": pr.user.login,
-            "branch": pr.head.ref,
-            "head_ref": pr.head.ref,  # Add head_ref for consistency
-            "created_at": pr.created_at.isoformat() if pr.created_at else None,
-            "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
-            "draft": pr.draft,
-            "mergeable": pr.mergeable,
-            "labels": [label.name for label in pr.labels],
-        } for pr in repository.get_pulls(state="open")[:limit]]
+        prs = []
+        for pr in repository.get_pulls(state="open")[:limit]:
+            pr_data = {
+                "number": pr.number,
+                "title": pr.title,
+                "author": pr.user.login,
+                "branch": pr.head.ref,
+                "head_ref": pr.head.ref,  # Add head_ref for consistency
+                "created_at": pr.created_at.isoformat() if pr.created_at else None,
+                "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
+                "draft": pr.draft,
+                "labels": [label.name for label in pr.labels],
+            }
+
+            # Only fetch mergeable status if explicitly requested
+            # This avoids N+1 API calls in list views
+            if include_mergeable:
+                pr_data["mergeable"] = pr.mergeable
+
+            prs.append(pr_data)
+
+        return prs
 
     def get_pr_reviews(
         self, owner: str, repo: str, pr_number: int

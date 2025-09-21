@@ -68,6 +68,8 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
     print("-" * 70)
 
     try:
+        # Security: cmd list is built from static strings and constrained argparse choices
+        # No user input is passed directly to the shell (list form prevents injection)
         result = subprocess.run(cmd, check=False)
         return result.returncode
     except KeyboardInterrupt:
@@ -130,19 +132,17 @@ def main():
     # Install dependencies if requested
     if args.install_deps:
         print("Installing test dependencies...")
-        deps = [
-            "pytest>=7.0.0",
-            "pytest-mock>=3.10.0",
-            "pytest-cov>=4.0.0",
-            "pytest-xdist>=3.0.0",  # For parallel execution
-        ]
-
-        for dep in deps:
-            try:
-                subprocess.run([sys.executable, "-m", "pip", "install", dep], check=True)
-                print(f"✓ Installed {dep}")
-            except subprocess.CalledProcessError:
-                print(f"✗ Failed to install {dep}")
+        # Install test dependencies from pyproject.toml
+        try:
+            # Security: Using list form prevents shell injection
+            # The package spec ".[test]" is a static string, not user input
+            install_cmd = [sys.executable, "-m", "pip", "install", "-e", ".[test]"]
+            subprocess.run(install_cmd, check=True)
+            print("✓ Installed test dependencies from pyproject.toml")
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to install test dependencies: {e}")
+            print("You can install them manually with: pip install -e '.[test]'")
+            return 1
 
         print("Dependencies installation complete.\n")
 
