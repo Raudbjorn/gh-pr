@@ -20,20 +20,23 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False, ma
     """
     cmd = [sys.executable, "-m", "pytest"]
 
-    # Add test paths based on type
+    # Add test paths and base marker by type
+    base_marker = None
     if test_type == "unit":
         cmd.append("tests/unit/")
     elif test_type == "integration":
         cmd.append("tests/integration/")
     elif test_type == "phase4":
-        cmd.extend(["-m", "phase4"])
+        base_marker = "phase4"
+    elif test_type == "phase5":
+        base_marker = "phase5"
     elif test_type == "all":
         cmd.append("tests/")
 
-    # Add marker filter if specified
-    if marker:
-        cmd.extend(["-m", marker])
-
+    # Compose final marker expression once to avoid overrides
+    expr = " and ".join(filter(None, [base_marker, f"({marker})" if marker else None]))
+    if expr:
+        cmd.extend(["-m", expr])
     # Add verbosity
     if verbose:
         cmd.append("-vv")
