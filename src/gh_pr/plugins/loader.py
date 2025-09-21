@@ -20,6 +20,9 @@ from .base import Plugin, PluginMetadata, PluginContext
 
 logger = logging.getLogger(__name__)
 
+# Plugin loader namespace to prevent collisions with stdlib/third-party packages
+PLUGIN_NAMESPACE = "gh_pr_plugins"
+
 
 def sanitize_module_name(name: str) -> str:
     """
@@ -258,8 +261,11 @@ class PluginLoader:
 
         # Sanitize the plugin name for use as a module name
         safe_module_name = sanitize_module_name(name)
-        # Use package name for proper imports without modifying sys.path
-        package_name = f"{safe_module_name}.{main_file.stem}" if main_file.name == 'plugin.py' else safe_module_name
+        # Place all plugins under the isolated namespace to prevent collisions
+        if main_file.name == 'plugin.py':
+            package_name = f"{PLUGIN_NAMESPACE}.{safe_module_name}.{main_file.stem}"
+        else:
+            package_name = f"{PLUGIN_NAMESPACE}.{safe_module_name}"
         return self._load_python_plugin(package_name, main_file)
 
     def load_all_plugins(self) -> Dict[str, Plugin]:
