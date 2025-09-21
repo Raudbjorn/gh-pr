@@ -1,6 +1,6 @@
 """Theme system for gh-pr TUI with customizable color schemes."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, ClassVar
 from dataclasses import dataclass, replace
 from rich.theme import Theme
 from rich.style import Style
@@ -55,7 +55,7 @@ class ThemeManager:
     """Manages themes and color schemes for the TUI."""
 
     # Predefined themes
-    THEMES = {
+    THEMES: ClassVar[Dict[str, Any]] = {
         "default": ColorScheme(),
         "dark": ColorScheme(
             primary="#0D6EFD",

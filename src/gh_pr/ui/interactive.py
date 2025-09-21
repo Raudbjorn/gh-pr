@@ -1,7 +1,7 @@
 """Interactive Terminal User Interface (TUI) for gh-pr using Textual."""
 
 import asyncio
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional, Callable, ClassVar
 from datetime import datetime
 
 from textual.app import App, ComposeResult
@@ -76,7 +76,7 @@ class FilterMenu(Widget):
     """
 
     # Define available filters with descriptions
-    FILTERS = {
+    FILTERS: ClassVar[Dict[str, str]] = {
         "all": "All Comments",
         "unresolved": "Unresolved Only",
         "resolved_active": "Resolved (Active)",
