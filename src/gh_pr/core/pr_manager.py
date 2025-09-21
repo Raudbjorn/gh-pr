@@ -13,6 +13,7 @@ from ..utils.cache import CacheManager
 from .comments import CommentProcessor
 from .filters import CommentFilter
 from .github import GitHubClient
+from .graphql import GraphQLClient
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +21,26 @@ logger = logging.getLogger(__name__)
 class PRManager:
     """Manages PR operations and business logic."""
 
-    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager):
+    def __init__(self, github_client: GitHubClient, cache_manager: CacheManager, token: Optional[str] = None):
         """
         Initialize PRManager.
 
         Args:
             github_client: GitHub API client
             cache_manager: Cache manager instance
+            token: GitHub token for GraphQL client (optional)
         """
         self.github = github_client
         self.cache = cache_manager
         self.comment_processor = CommentProcessor()
         self.filter = CommentFilter()
+
+        # Initialize GraphQL client with provided token or None
+        # If no token provided, GraphQL operations will not be available
+        if token:
+            self.graphql = GraphQLClient(token)
+        else:
+            self.graphql = None
 
     def parse_pr_identifier(
         self, identifier: str, default_repo: Optional[str] = None
@@ -518,7 +527,7 @@ class PRManager:
 
     def resolve_outdated_comments(
         self, owner: str, repo: str, pr_number: int
-    ) -> int:
+    ) -> tuple[int, list[str]]:
         """
         Resolve all outdated unresolved comments.
 
@@ -528,19 +537,43 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Number of comments resolved
-
-        Raises:
-            NotImplementedError: This feature is not yet implemented
+            Tuple of (number of comments resolved, list of errors)
         """
-        raise NotImplementedError(
-            "Resolving outdated comments requires GraphQL API implementation. "
-            "This feature is not yet implemented."
-        )
+        resolved_count = 0
+        errors = []
+
+        if not self.graphql:
+            errors.append("GraphQL client not initialized. Token required for this operation.")
+            return resolved_count, errors
+
+        # Get all review threads using GraphQL
+        threads, error = self.graphql.get_pr_threads(owner, repo, pr_number)
+
+        if error:
+            errors.append(f"Failed to fetch threads: {error}")
+            return resolved_count, errors
+
+        if not threads:
+            return resolved_count, errors
+
+        # Filter for outdated and unresolved threads
+        for thread in threads:
+            if thread.get("isOutdated") and not thread.get("isResolved"):
+                thread_id = thread.get("id")
+                if thread_id:
+                    success, error_msg = self.graphql.resolve_thread(thread_id)
+                    if success:
+                        resolved_count += 1
+                        logger.debug(f"Resolved outdated thread {thread_id}")
+                    elif error_msg:
+                        errors.append(f"Thread {thread_id}: {error_msg}")
+                        logger.warning(f"Failed to resolve thread {thread_id}: {error_msg}")
+
+        return resolved_count, errors
 
     def accept_all_suggestions(
         self, owner: str, repo: str, pr_number: int
-    ) -> int:
+    ) -> tuple[int, list[str]]:
         """
         Accept all suggestions in PR comments.
 
@@ -550,13 +583,54 @@ class PRManager:
             pr_number: PR number
 
         Returns:
-            Number of suggestions accepted
-
-        Raises:
-            NotImplementedError: This feature is not yet implemented
+            Tuple of (number of suggestions accepted, list of errors)
         """
-        raise NotImplementedError(
-            "Accepting suggestions requires specific API endpoints. "
-            "This feature is not yet implemented."
-        )
+        accepted_count = 0
+        errors = []
+
+        if not self.graphql:
+            errors.append("GraphQL client not initialized. Token required for this operation.")
+            return accepted_count, errors
+
+        # Get all suggestions using GraphQL
+        suggestions, error = self.graphql.get_pr_suggestions(owner, repo, pr_number)
+
+        if error:
+            errors.append(f"Failed to fetch suggestions: {error}")
+            return accepted_count, errors
+
+        if not suggestions:
+            return accepted_count, errors
+
+        # Accept each suggestion
+        for suggestion in suggestions:
+            suggestion_id = suggestion.get("id")
+            if suggestion_id:
+                success, error_msg = self.graphql.accept_suggestion(suggestion_id)
+                if success:
+                    accepted_count += 1
+                    logger.debug(f"Accepted suggestion {suggestion_id}")
+                elif error_msg:
+                    errors.append(f"Suggestion {suggestion_id}: {error_msg}")
+                    logger.warning(f"Failed to accept suggestion {suggestion_id}: {error_msg}")
+
+        return accepted_count, errors
+
+    def get_pr_comments(self, owner: str, repo: str, pr_number: int) -> Optional[list[dict[str, Any]]]:
+        """
+        Get PR comments.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: PR number
+
+        Returns:
+            List of comment dictionaries or None if error
+        """
+        try:
+            return self.github.get_pr_review_comments(owner, repo, pr_number)
+        except GithubException as e:
+            logger.error(f"Failed to get PR comments: {e}")
+            return None
 
