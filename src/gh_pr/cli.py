@@ -22,8 +22,10 @@ from .utils.cache import CacheManager
 from .utils.clipboard import ClipboardManager
 from .utils.config import ConfigManager
 from .utils.export import ExportManager
+from .utils.rich_logger import get_logger, setup_logging
 
 console = Console()
+logger = get_logger(__name__)
 
 # Constants
 MAX_CONTEXT_LINES = 50  # Maximum number of context lines to show
@@ -254,9 +256,11 @@ def main(**kwargs) -> None:
         _handle_output(display_manager, pr_data, comments, summary, cfg.export, cfg.copy, clipboard_timeout)
 
     except KeyboardInterrupt:
+        logger.warning("Operation interrupted by user")
         console.print("\n[yellow]Interrupted by user[/yellow]")
         sys.exit(130)
     except Exception as e:
+        logger.exception("Unexpected error occurred")
         console.print(f"[red]Error: {e}[/red]")
         if cfg.verbose:
             console.print_exception()
@@ -267,6 +271,13 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
     """Initialize configuration, cache, and token services."""
     config_manager = ConfigManager(config_path=config_path)
 
+    # Setup logging based on configuration
+    config_manager.setup_logging()
+    logger.info("gh-pr CLI starting",
+               cache_disabled=no_cache,
+               clear_cache=clear_cache,
+               config_path=config_path)
+
     cache_manager = CacheManager(
         enabled=not no_cache,
         location=config_manager.get("cache.location", "~/.cache/gh-pr")
@@ -274,15 +285,18 @@ def _initialize_services(config_path: Optional[str], no_cache: bool, clear_cache
 
     if clear_cache:
         cache_manager.clear()
+        logger.info("Cache cleared successfully")
         console.print("[green]✓ Cache cleared successfully[/green]")
         return None
 
     token_manager = TokenManager(token=token, config_manager=config_manager)
 
     if not token_manager.validate_token():
+        logger.error("Token validation failed")
         console.print("[red]✗ Invalid or expired GitHub token[/red]")
         sys.exit(1)
 
+    logger.info("Services initialized successfully")
     return config_manager, cache_manager, token_manager
 
 

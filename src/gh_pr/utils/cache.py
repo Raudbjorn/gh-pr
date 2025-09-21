@@ -1,14 +1,15 @@
 """Caching functionality for gh-pr."""
 
 import hashlib
-import logging
 import os
 from pathlib import Path
 from typing import Any, Optional
 
 import diskcache
 
-logger = logging.getLogger(__name__)
+from .rich_logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class CacheManager:

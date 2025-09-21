@@ -11,7 +11,6 @@ from github import GithubException
 
 from gh_pr.core.pr_manager import PRManager
 
-
 # TestGitRepositoryValidation class removed - _validate_git_repository function no longer exists
 
 class TestPRManagerGitIntegration:

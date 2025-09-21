@@ -357,7 +357,8 @@ class TestAuthenticationFlow(unittest.TestCase):
 
             # Token info should handle error gracefully
             token_info = token_manager.get_token_info()
-            self.assertIsNone(token_info)  # Should return None on error
+            self.assertIsNotNone(token_info)  # Should return partial info even on rate limit error
+            self.assertEqual(token_info["rate_limit"]["limit"], "N/A")  # Rate limit should show fallback
 
     @patch('gh_pr.auth.token.Github')
     def test_permission_flow_fallback_mechanisms(self, mock_github_class):

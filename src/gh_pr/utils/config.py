@@ -103,6 +103,16 @@ class ConfigManager:
             "auto_strip_ansi": True,
             "timeout_seconds": 5.0,
         },
+        "logging": {
+            "level": "INFO",
+            "console_output": True,
+            "file_output": True,
+            "log_file": None,  # Auto-generated if None
+            "timezone": "Atlantic/Reykjavik",
+            "syslog_output": False,
+            "syslog_address": None,  # None for local, or ("host", 514) for remote
+            "syslog_facility": "LOG_USER",  # Syslog facility name
+        },
     }
 
     def __init__(self, config_path: Optional[str] = None):
@@ -368,3 +378,85 @@ class ConfigManager:
         if not isinstance(additional_config, dict):
             raise TypeError("additional_config must be a dictionary")
         self._merge_config(self.config, additional_config)
+
+    def get_logging_config(self) -> dict[str, Any]:
+        """
+        Get logging configuration.
+
+        Returns:
+            Dictionary containing logging configuration
+        """
+        return self.get("logging", self.DEFAULT_CONFIG["logging"])
+
+    def setup_logging(self) -> None:
+        """
+        Setup application logging using the configured settings.
+
+        This method initializes the RichLogger with the configuration
+        settings and makes it available throughout the application.
+        """
+        import logging
+
+        from .rich_logger import setup_logging
+
+        log_config = self.get_logging_config()
+
+        # Convert string log level to int
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL,
+        }
+        level = level_map.get(log_config["level"].upper(), logging.INFO)
+
+        # Get timezone configuration
+        import pytz
+        timezone_str = log_config.get("timezone", "Atlantic/Reykjavik")
+        try:
+            timezone_obj = pytz.timezone(timezone_str)
+        except pytz.exceptions.UnknownTimeZoneError:
+            timezone_obj = pytz.timezone("Atlantic/Reykjavik")  # Fallback to default
+
+        # Parse syslog facility if configured
+        import logging.handlers
+        syslog_facility = log_config.get("syslog_facility", "LOG_USER")
+        facility_map = {
+            "LOG_KERN": logging.handlers.SysLogHandler.LOG_KERN,
+            "LOG_USER": logging.handlers.SysLogHandler.LOG_USER,
+            "LOG_MAIL": logging.handlers.SysLogHandler.LOG_MAIL,
+            "LOG_DAEMON": logging.handlers.SysLogHandler.LOG_DAEMON,
+            "LOG_AUTH": logging.handlers.SysLogHandler.LOG_AUTH,
+            "LOG_SYSLOG": logging.handlers.SysLogHandler.LOG_SYSLOG,
+            "LOG_LPR": logging.handlers.SysLogHandler.LOG_LPR,
+            "LOG_NEWS": logging.handlers.SysLogHandler.LOG_NEWS,
+            "LOG_UUCP": logging.handlers.SysLogHandler.LOG_UUCP,
+            "LOG_CRON": logging.handlers.SysLogHandler.LOG_CRON,
+            "LOG_LOCAL0": logging.handlers.SysLogHandler.LOG_LOCAL0,
+            "LOG_LOCAL1": logging.handlers.SysLogHandler.LOG_LOCAL1,
+            "LOG_LOCAL2": logging.handlers.SysLogHandler.LOG_LOCAL2,
+            "LOG_LOCAL3": logging.handlers.SysLogHandler.LOG_LOCAL3,
+            "LOG_LOCAL4": logging.handlers.SysLogHandler.LOG_LOCAL4,
+            "LOG_LOCAL5": logging.handlers.SysLogHandler.LOG_LOCAL5,
+            "LOG_LOCAL6": logging.handlers.SysLogHandler.LOG_LOCAL6,
+            "LOG_LOCAL7": logging.handlers.SysLogHandler.LOG_LOCAL7,
+        }
+        syslog_facility_code = facility_map.get(syslog_facility, logging.handlers.SysLogHandler.LOG_USER)
+
+        # Parse syslog address
+        syslog_address = log_config.get("syslog_address")
+        if syslog_address and isinstance(syslog_address, list) and len(syslog_address) == 2:
+            syslog_address = tuple(syslog_address)  # Convert list to tuple
+
+        # Setup logging with configuration
+        setup_logging(
+            level=level,
+            log_file=log_config.get("log_file"),
+            console_output=log_config.get("console_output", True),
+            file_output=log_config.get("file_output", True),
+            syslog_output=log_config.get("syslog_output", False),
+            syslog_address=syslog_address,
+            syslog_facility=syslog_facility_code,
+            timezone=timezone_obj
+        )

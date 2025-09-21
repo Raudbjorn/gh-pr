@@ -1,0 +1,55 @@
+# Example logging configuration for gh-pr
+# Place this file at ~/.config/gh-pr/config.toml or .gh-pr.toml
+
+[logging]
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+level = "INFO"
+
+# Console output with rich formatting
+console_output = true
+
+# File output with rotation
+file_output = true
+log_file = "~/.cache/gh-pr/logs/gh-pr.log"  # Optional: auto-generated if None
+
+# Timezone for log timestamps
+timezone = "Atlantic/Reykjavik"
+
+# Syslog integration for centralized logging
+syslog_output = false
+
+# For local syslog (leave null for local):
+# syslog_address = null
+
+# For remote syslog server:
+# syslog_address = ["syslog.example.com", 514]
+
+# Syslog facility - determines log categorization
+# Options: LOG_KERN, LOG_USER, LOG_MAIL, LOG_DAEMON, LOG_AUTH, LOG_SYSLOG,
+#          LOG_LPR, LOG_NEWS, LOG_UUCP, LOG_CRON, LOG_LOCAL0-LOG_LOCAL7
+syslog_facility = "LOG_USER"
+
+# Example configurations for different environments:
+
+# Development environment (verbose local logging):
+# [logging]
+# level = "DEBUG"
+# console_output = true
+# file_output = true
+# syslog_output = false
+
+# Production environment (centralized logging):
+# [logging]
+# level = "WARNING"
+# console_output = false
+# file_output = true
+# syslog_output = true
+# syslog_address = ["logs.company.com", 514]
+# syslog_facility = "LOG_LOCAL0"
+
+# Container environment (stdout only):
+# [logging]
+# level = "INFO"
+# console_output = true
+# file_output = false
+# syslog_output = false
