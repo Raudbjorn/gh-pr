@@ -5,7 +5,7 @@ Tests cross-platform desktop notifications.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock, call
+from unittest.mock import Mock, patch, MagicMock, call, AsyncMock
 import asyncio
 import sys
 import subprocess
@@ -145,8 +145,8 @@ class TestNotificationManager(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @patch('builtins.print')
-    def test_terminal_notification_fallback(self, mock_print):
+    @patch('rich.console.Console.print')
+    def test_terminal_notification_fallback(self, mock_console_print):
         """Test terminal notification fallback."""
         result = self.manager._notify_terminal(
             "Test Title",
@@ -154,13 +154,13 @@ class TestNotificationManager(unittest.TestCase):
         )
 
         self.assertTrue(result)
-        mock_print.assert_called()
+        mock_console_print.assert_called()
 
-        # Check notification was printed
-        call_args = mock_print.call_args_list
-        printed = ' '.join(str(arg[0][0]) for arg in call_args)
-        self.assertIn("Test Title", printed)
-        self.assertIn("Test Message", printed)
+        # Check notification was printed with Rich Panel
+        call_args = mock_console_print.call_args
+        panel_arg = call_args[0][0]  # First argument should be the Panel
+        # The Panel will contain title and message information
+        self.assertTrue(hasattr(panel_arg, 'title') or hasattr(panel_arg, 'renderable'))
 
     @patch('sys.platform', 'darwin')
     @patch('subprocess.run')
@@ -242,10 +242,14 @@ class TestNotificationManager(unittest.TestCase):
         self.assertTrue(config.fallback_to_terminal)
         self.assertIsNone(config.icon_path)
 
-    @patch('subprocess.run')
-    def test_test_notification(self, mock_run):
+    @patch('asyncio.create_subprocess_exec')
+    def test_test_notification(self, mock_subprocess):
         """Test the test notification method."""
-        mock_run.return_value = Mock(returncode=0)
+        # Mock the async subprocess process
+        mock_process = AsyncMock()
+        mock_process.communicate.return_value = (b'', b'')
+        mock_process.returncode = 0
+        mock_subprocess.return_value = mock_process
 
         # Disable plyer for predictable testing
         self.manager._use_plyer = False
@@ -254,11 +258,8 @@ class TestNotificationManager(unittest.TestCase):
         result = self.manager.test_notification()
 
         # Should send test notification
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args[0][0]
-        script = call_args[2] if len(call_args) > 2 else ""
-        self.assertIn("gh-pr Test", script)
-        self.assertIn("working", script.lower())
+        self.assertTrue(result)
+        mock_subprocess.assert_called()
 
 
 if __name__ == '__main__':

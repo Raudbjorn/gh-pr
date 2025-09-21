@@ -220,9 +220,13 @@ class NotificationManager:
                 return process.returncode == 0
 
             except asyncio.TimeoutError:
-                # Kill process if timeout
-                process.kill()
-                await process.wait()
+                # Timeout occurred, try to terminate the process gracefully
+                try:
+                    process.terminate()
+                    await asyncio.wait_for(process.wait(), timeout=1.0)
+                except:
+                    # Force kill if termination fails
+                    process.kill()
                 logger.debug("macOS notification timed out")
                 return False
 
@@ -258,7 +262,7 @@ class NotificationManager:
                 # Add urgency
                 cmd.append(f'--urgency={urgency}')
 
-                # Add timeout
+                # Add timeout in milliseconds
                 cmd.extend(['-t', str(self.config.timeout * 1000)])
 
                 # Add icon if available
