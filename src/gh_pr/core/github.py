@@ -1,7 +1,7 @@
 """GitHub API client wrapper."""
 
-from typing import Any, Optional
 import logging
+from typing import Any, Optional
 
 from github import Auth, Github, GithubException
 from github.PullRequest import PullRequest
