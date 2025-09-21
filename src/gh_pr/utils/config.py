@@ -34,6 +34,13 @@ class ConfigManager:
             "auto_strip_ansi": True,
             "timeout_seconds": 5.0,
         },
+        "logging": {
+            "level": "INFO",
+            "console_output": True,
+            "file_output": True,
+            "log_file": None,  # Auto-generated if None
+            "timezone": "Atlantic/Reykjavik",
+        },
     }
 
     def __init__(self, config_path: Optional[str] = None):
@@ -286,3 +293,42 @@ class ConfigManager:
         if not isinstance(additional_config, dict):
             raise TypeError("additional_config must be a dictionary")
         self._merge_config(self.config, additional_config)
+
+    def get_logging_config(self) -> dict[str, Any]:
+        """
+        Get logging configuration.
+
+        Returns:
+            Dictionary containing logging configuration
+        """
+        return self.get("logging", self.DEFAULT_CONFIG["logging"])
+
+    def setup_logging(self) -> None:
+        """
+        Setup application logging using the configured settings.
+
+        This method initializes the RichLogger with the configuration
+        settings and makes it available throughout the application.
+        """
+        from .rich_logger import setup_logging
+        import logging
+
+        log_config = self.get_logging_config()
+
+        # Convert string log level to int
+        level_map = {
+            "DEBUG": logging.DEBUG,
+            "INFO": logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL,
+        }
+        level = level_map.get(log_config["level"].upper(), logging.INFO)
+
+        # Setup logging with configuration
+        setup_logging(
+            level=level,
+            log_file=log_config.get("log_file"),
+            console_output=log_config.get("console_output", True),
+            file_output=log_config.get("file_output", True)
+        )

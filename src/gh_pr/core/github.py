@@ -6,6 +6,10 @@ from github import Auth, Github, GithubException
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+from ..utils.rich_logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class GitHubClient:
     """Wrapper for GitHub API operations."""
@@ -17,11 +21,15 @@ class GitHubClient:
         Args:
             token: GitHub authentication token
         """
+        logger.info("Initializing GitHubClient", token_length=len(token))
+
         # Store token privately to avoid accidental exposure
         self._token = token
         auth = Auth.Token(token)
-        self.github = Github(auth=auth)
+        self.github = Github(auth=auth, timeout=30)
         self._user = None
+
+        logger.debug("GitHubClient initialized successfully")
 
     @property
     def user(self):
@@ -44,7 +52,17 @@ class GitHubClient:
         Raises:
             GithubException: If repository not found or access denied
         """
-        return self.github.get_repo(f"{owner}/{repo}")
+        logger.debug("Fetching repository", repo=f"{owner}/{repo}")
+        try:
+            repository = self.github.get_repo(f"{owner}/{repo}")
+            logger.debug("Repository fetched successfully", repo=f"{owner}/{repo}")
+            return repository
+        except GithubException as e:
+            logger.error("Failed to fetch repository",
+                        repo=f"{owner}/{repo}",
+                        error=str(e),
+                        status_code=getattr(e, 'status', 'unknown'))
+            raise
 
     def get_pull_request(self, owner: str, repo: str, pr_number: int) -> PullRequest:
         """
@@ -61,8 +79,24 @@ class GitHubClient:
         Raises:
             GithubException: If PR not found or access denied
         """
-        repository = self.get_repository(owner, repo)
-        return repository.get_pull(pr_number)
+        logger.debug("Fetching pull request",
+                    repo=f"{owner}/{repo}",
+                    pr_number=pr_number)
+        try:
+            repository = self.get_repository(owner, repo)
+            pr = repository.get_pull(pr_number)
+            logger.debug("Pull request fetched successfully",
+                        repo=f"{owner}/{repo}",
+                        pr_number=pr_number,
+                        pr_title=pr.title[:50] + "..." if len(pr.title) > 50 else pr.title)
+            return pr
+        except GithubException as e:
+            logger.error("Failed to fetch pull request",
+                        repo=f"{owner}/{repo}",
+                        pr_number=pr_number,
+                        error=str(e),
+                        status_code=getattr(e, 'status', 'unknown'))
+            raise
 
     def get_open_pr_count(self, owner: str, repo: str) -> int:
         """

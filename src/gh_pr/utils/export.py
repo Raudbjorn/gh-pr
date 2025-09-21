@@ -6,6 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .rich_logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class ExportManager:
     """Manage export of PR data to various formats."""

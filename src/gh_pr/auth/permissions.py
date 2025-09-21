@@ -5,6 +5,10 @@ from typing import Any
 
 from github import Github, GithubException
 
+from ..utils.rich_logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class PermissionChecker:
     """Check permissions for GitHub operations."""
@@ -49,6 +53,10 @@ class PermissionChecker:
         Returns:
             Dictionary with permission status and details
         """
+        logger.debug("Checking operation permissions",
+                    operation=operation,
+                    repo=f"{owner}/{repo}")
+
         result = {
             "allowed": False,
             "reason": None,
@@ -102,9 +110,19 @@ class PermissionChecker:
                 result["missing_permissions"] = required
 
         except GithubException as e:
+            logger.warning("Error checking permissions",
+                         operation=operation,
+                         repo=f"{owner}/{repo}",
+                         error=str(e),
+                         error_type=e.__class__.__name__)
             result["allowed"] = False
             result["reason"] = f"Error checking permissions: {str(e)}"
 
+        logger.info("Permission check completed",
+                   operation=operation,
+                   repo=f"{owner}/{repo}",
+                   allowed=result["allowed"],
+                   reason=result["reason"])
         return result
 
     def check_pr_permissions(

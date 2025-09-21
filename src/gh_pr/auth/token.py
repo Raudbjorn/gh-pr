@@ -1,7 +1,6 @@
 """GitHub token management and validation."""
 
 import hashlib
-import logging
 import os
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -10,7 +9,9 @@ from typing import Any, Optional
 from github import Github, GithubException
 from github.Auth import Token as GithubToken
 
-logger = logging.getLogger(__name__)
+from ..utils.rich_logger import get_logger
+
+logger = get_logger(__name__)
 
 # Constants
 SUBPROCESS_TIMEOUT = 5  # seconds
@@ -29,11 +30,18 @@ class TokenManager:
             token: GitHub token. If not provided, will try to get from environment.
             config_manager: Optional config manager for token storage.
         """
+        logger.info("Initializing TokenManager",
+                   token_provided=bool(token),
+                   config_manager_available=bool(config_manager))
+
         self.config_manager = config_manager
         self.token = self._get_token(token)
         self._github: Optional[Github] = None
         self._token_info: Optional[dict[str, Any]] = None
         self._expiration_info: Optional[dict[str, Any]] = None
+
+        logger.debug("TokenManager initialized successfully",
+                    token_length=len(self.token) if self.token else 0)
 
     def _get_token_key(self) -> str:
         """
@@ -67,22 +75,28 @@ class TokenManager:
             ValueError: If no token is found
         """
         if token:
+            logger.debug("Using provided token parameter")
             return token
 
         # Try environment variables
         for env_var in ["GH_TOKEN", "GITHUB_TOKEN"]:
             if env_token := os.environ.get(env_var):
+                logger.debug("Found token from environment variable", source=env_var)
                 return env_token
 
         # Try configuration file
         if self.config_manager:
             for key in ("github.token", "github.default_token"):
                 if config_token := self.config_manager.get(key):
+                    logger.debug("Found token from configuration", config_key=key)
                     return config_token
         # Try gh CLI
         if gh_token := self._get_gh_cli_token():
+            logger.debug("Found token from gh CLI")
             return gh_token
 
+        logger.error("No GitHub token found in any source",
+                    checked_sources=["parameter", "GH_TOKEN", "GITHUB_TOKEN", "config", "gh_cli"])
         raise ValueError(
             "No GitHub token found. Please provide a token via --token, "
             "GH_TOKEN/GITHUB_TOKEN environment variable, config file, or configure gh CLI"
@@ -155,13 +169,18 @@ class TokenManager:
         Returns:
             True if token is valid, False otherwise
         """
+        logger.debug("Validating GitHub token")
         try:
             github = self.get_github_client()
             # Try to get the authenticated user
             user = github.get_user()
-            _ = user.login  # Force API call
+            username = user.login  # Force API call
+            logger.info("Token validation successful", username=username)
             return True
-        except (GithubException, Exception):
+        except (GithubException, Exception) as e:
+            logger.warning("Token validation failed",
+                         error=str(e),
+                         error_type=e.__class__.__name__)
             return False
 
     def get_token_info(self) -> Optional[dict[str, Any]]:
@@ -205,7 +224,9 @@ class TokenManager:
                 }
             except (GithubException, KeyError, AttributeError) as e:
                 # Fallback if rate limit API changes or data is missing
-                logger.warning(f"Could not retrieve rate limit info: {e}")
+                logger.warning("Could not retrieve rate limit info",
+                             error=str(e),
+                             error_type=e.__class__.__name__)
                 info["rate_limit"] = {
                     "limit": "N/A",
                     "remaining": "N/A",
@@ -235,7 +256,10 @@ class TokenManager:
             return info
 
         except (GithubException, ValueError, KeyError) as e:
-            logger.debug(f"Failed to get token info: {e}")
+            logger.error("Failed to get token info",
+                        error=str(e),
+                        error_type=e.__class__.__name__,
+                        token_type="partial_token_hidden")
             return None
 
     def has_permissions(self, required_scopes: list[str]) -> bool:
@@ -402,5 +426,8 @@ class TokenManager:
             self.config_manager.set(f"tokens.{token_key}", metadata)
             return True
         except Exception as e:
-            logger.debug(f"Failed to store token metadata: {e}")
+            logger.error("Failed to store token metadata",
+                        error=str(e),
+                        error_type=e.__class__.__name__,
+                        token_key="hidden")
             return False
