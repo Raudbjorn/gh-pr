@@ -47,6 +47,46 @@ BACKUP_COUNT = 5
 # Generate unique session ID for this process
 SESSION_ID = str(uuid.uuid4())
 
+# Pre-compiled regex patterns for performance optimization
+SENSITIVE_ENV_PATTERNS = [
+    'GH_TOKEN', 'GITHUB_TOKEN', 'TOKEN', 'PASSWORD', 'SECRET', 'KEY',
+    'API_KEY', 'ACCESS_TOKEN', 'REFRESH_TOKEN', 'AUTH_TOKEN'
+]
+
+
+class TimezoneAwareFormatter(logging.Formatter):
+    """Custom formatter that handles timezone-aware timestamps."""
+
+    def __init__(self, fmt=None, datefmt=None, style='%', tz=None):
+        """
+        Initialize the timezone-aware formatter.
+
+        Args:
+            fmt: Log format string
+            datefmt: Date format string
+            style: Format style ('%', '{', '$')
+            tz: Timezone for timestamp formatting
+        """
+        super().__init__(fmt, datefmt, style)
+        self.tz = tz
+
+    def formatTime(self, record, datefmt=None):  # noqa: N802
+        """
+        Format the timestamp with timezone awareness.
+
+        Args:
+            record: Log record
+            datefmt: Date format string
+
+        Returns:
+            str: Formatted timestamp
+        """
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        if self.tz:
+            dt = dt.astimezone(self.tz)
+        s = dt.strftime(datefmt) if datefmt else dt.isoformat()
+        return s
+
 
 class RichLogger:
     """
@@ -253,18 +293,30 @@ class RichLogger:
                     'lineno': frame_info.lineno,
                     'module': inspect.getmodulename(frame_info.filename) or 'unknown'
                 }
-        # Fallback if we can't find a proper frame
-        frame = sys._getframe(3)
+        # Fallback if we can't find a proper frame - use last available frame
+        stack = inspect.stack()
+        if len(stack) > 1:
+            frame_info = stack[-1]  # Use the outermost frame
+            return {
+                'filename': os.path.basename(frame_info.filename),
+                'function': frame_info.function,
+                'lineno': frame_info.lineno,
+                'module': inspect.getmodulename(frame_info.filename) or 'unknown'
+            }
+        # Ultimate fallback
         return {
-            'filename': os.path.basename(frame.f_code.co_filename),
-            'function': frame.f_code.co_name,
-            'lineno': frame.f_lineno,
-            'module': frame.f_globals.get('__name__', 'unknown')
+            'filename': 'unknown',
+            'function': 'unknown',
+            'lineno': 0,
+            'module': 'unknown'
         }
 
     def _mask_sensitive_env_vars(self, text: str) -> str:
         """
         Mask sensitive environment variables in log text.
+
+        Uses pre-compiled regex patterns for optimal performance and caches
+        compiled patterns to avoid recompilation on every call.
 
         Args:
             text: Text that might contain sensitive information
@@ -272,34 +324,31 @@ class RichLogger:
         Returns:
             Text with sensitive values masked
         """
-        sensitive_patterns = [
-            'GH_TOKEN', 'GITHUB_TOKEN', 'TOKEN', 'PASSWORD', 'SECRET', 'KEY',
-            'API_KEY', 'ACCESS_TOKEN', 'REFRESH_TOKEN', 'AUTH_TOKEN'
-        ]
+        if not hasattr(self, '_compiled_patterns'):
+            self._compiled_patterns = {}
 
         masked_text = text
         for var, value in os.environ.items():
-            if any(pattern in var.upper() for pattern in sensitive_patterns) and value and len(value) > 4:
-                # Use word boundaries for more precise replacement
-                # Also mask environment variable assignments like VAR=value
-                escaped_value = re.escape(value)
-                masked_value = value[:4] + '*' * (len(value) - 4)
+            if any(pattern in var.upper() for pattern in SENSITIVE_ENV_PATTERNS) and value and len(value) > 4:
+                # Cache compiled patterns to avoid recompilation
+                cache_key = f"{var}_{len(value)}"
+                if cache_key not in self._compiled_patterns:
+                    escaped_value = re.escape(value)
+                    self._compiled_patterns[cache_key] = {
+                        'standalone': re.compile(rf'\b{escaped_value}\b'),
+                        'assignment': re.compile(rf'({re.escape(var)}=){escaped_value}'),
+                        'masked_value': value[:4] + '*' * (len(value) - 4)
+                    }
 
-                # Replace value when it appears standalone or in assignments
-                patterns = [
-                    rf'\b{escaped_value}\b',  # Word boundaries
-                    rf'({re.escape(var)}=){escaped_value}'  # VAR=value pattern
-                ]
+                patterns = self._compiled_patterns[cache_key]
+                masked_value = patterns['masked_value']
 
-                for pattern in patterns:
-                    if '=' in pattern:
-                        # For assignment patterns, preserve the VAR= part
-                        # Use a replacement function to avoid group reference issues
-                        def replacement(match, mv=masked_value):
-                            return match.group(1) + mv
-                        masked_text = re.sub(pattern, replacement, masked_text)
-                    else:
-                        masked_text = re.sub(pattern, masked_value, masked_text)
+                # Use compiled patterns for better performance
+                def replacement(match, mv=masked_value):
+                    return match.group(1) + mv
+
+                masked_text = patterns['assignment'].sub(replacement, masked_text)
+                masked_text = patterns['standalone'].sub(masked_value, masked_text)
 
         return masked_text
 
@@ -479,9 +528,20 @@ def traced(logger: Optional[RichLogger] = None):
             # Use provided logger or create a default one
             log = logger or get_logger(func.__module__)
 
-            # Log function entry
-            args_repr = [repr(a) for a in args[:3]]  # Limit to first 3 args
-            kwargs_repr = [f"{k}={v!r}" for k, v in list(kwargs.items())[:3]]
+            # Log function entry with secure argument representation
+            def safe_repr(obj, max_len=50):
+                """Create a safe, truncated representation of an object."""
+                try:
+                    repr_str = repr(obj)
+                    if len(repr_str) > max_len:
+                        repr_str = repr_str[:max_len-3] + "..."
+                    # Apply security masking
+                    return log._mask_sensitive_env_vars(repr_str)
+                except Exception:
+                    return f"<{type(obj).__name__}>"
+
+            args_repr = [safe_repr(a) for a in args[:3]]  # Limit to first 3 args
+            kwargs_repr = [f"{k}={safe_repr(v)}" for k, v in list(kwargs.items())[:3]]
             signature = ", ".join(args_repr + kwargs_repr)
             if len(args) > 3 or len(kwargs) > 3:
                 signature += ", ..."

@@ -14,19 +14,20 @@ logger = get_logger(__name__)
 class GitHubClient:
     """Wrapper for GitHub API operations."""
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, timeout: int = 30):
         """
         Initialize GitHubClient.
 
         Args:
             token: GitHub authentication token
+            timeout: Request timeout in seconds (default: 30)
         """
-        logger.info("Initializing GitHubClient", token_length=len(token))
+        logger.info("Initializing GitHubClient", token_length=len(token), timeout=timeout)
 
         # Store token privately to avoid accidental exposure
         self._token = token
         auth = Auth.Token(token)
-        self.github = Github(auth=auth, timeout=30)
+        self.github = Github(auth=auth, timeout=timeout)
         self._user = None
 
         logger.debug("GitHubClient initialized successfully")
