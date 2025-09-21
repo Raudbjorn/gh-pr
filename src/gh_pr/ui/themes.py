@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional, ClassVar
 from dataclasses import dataclass, replace
+import re
 from rich.theme import Theme
 from rich.style import Style
 
@@ -145,7 +146,40 @@ class ThemeManager:
         if custom_colors:
             for key, value in custom_colors.items():
                 if hasattr(self.color_scheme, key):
-                    setattr(self.color_scheme, key, value)
+                    if self._validate_color(value):
+                        setattr(self.color_scheme, key, value)
+                    else:
+                        print(f"Warning: Invalid color value '{value}' for key '{key}'")
+
+    def _validate_color(self, color: str) -> bool:
+        """Validate color format.
+
+        Args:
+            color: Color value to validate
+
+        Returns:
+            True if valid color format
+        """
+        if not isinstance(color, str):
+            return False
+
+        # Allow common color names
+        valid_names = {'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+                       'gray', 'grey', 'transparent', 'none'}
+        if color.lower() in valid_names:
+            return True
+
+        # Check hex color format (#RGB, #RRGGBB, #RRGGBBAA)
+        hex_pattern = r'^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$'
+        if re.match(hex_pattern, color):
+            return True
+
+        # Check rgb/rgba format
+        rgb_pattern = r'^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+(\s*,\s*[0-9.]+)?\s*\)$'
+        if re.match(rgb_pattern, color):
+            return True
+
+        return False
 
     def _load_theme(self, theme_name: str) -> ColorScheme:
         """Load a theme by name.

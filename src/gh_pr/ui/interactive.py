@@ -265,11 +265,27 @@ class SearchBar(Widget):
         # Cancel previous search task
         if self._search_task and not self._search_task.done():
             self._search_task.cancel()
+            # Ensure cancellation is handled
+            try:
+                asyncio.create_task(self._handle_cancelled_task(self._search_task))
+            except Exception:
+                pass  # Task already cancelled or finished
 
         # Start new debounced search
         self._search_task = asyncio.create_task(
             self._debounced_search(event.value.strip())
         )
+
+    async def _handle_cancelled_task(self, task: asyncio.Task) -> None:
+        """Handle cancelled task cleanup.
+
+        Args:
+            task: The cancelled task to clean up
+        """
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass  # Expected when task is cancelled
 
     async def _debounced_search(self, query: str) -> None:
         """Perform debounced search after delay.
@@ -541,7 +557,12 @@ class GhPrTUI(App):
                 )
 
             # Debounce: wait 150ms before starting search
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # Fallback for when not in async context
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
             self._search_debounce_handle = loop.call_later(
                 0.15, lambda: asyncio.create_task(debounce_search())
             )

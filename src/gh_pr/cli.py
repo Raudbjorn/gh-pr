@@ -495,22 +495,6 @@ def _launch_tui(cfg: CLIConfig) -> None:
         # Initialize GitHub client
         github_client = GitHubClient(token_manager.get_token())
 
-        # Create TUI configuration
-        tui_config = {
-            "github_token": token_manager.get_token(),
-            "default_repo": cfg.repo or config_manager.get("default_repo"),
-            "cache_ttl": config_manager.get("cache.ttl", 300),
-            "theme": config_manager.get("ui.theme", "default"),
-            "tui_settings": {
-                "auto_refresh": config_manager.get("tui.auto_refresh", False),
-                "refresh_interval": config_manager.get("tui.refresh_interval", 60),
-                "show_drafts": config_manager.get("tui.show_drafts", True),
-            }
-        }
-
-        # Create mock config object
-        from types import SimpleNamespace
-
         # Initialize PR Manager
         from .core.pr_manager import PRManager
         pr_manager = PRManager(github_client, cache_manager, token=token_manager.get_token())
