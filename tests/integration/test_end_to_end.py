@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from gh_pr.core.pr_manager import PRManager
 from gh_pr.core.github import GitHubClient
 from gh_pr.webhooks.server import WebhookServer
-from gh_pr.webhooks.handlers import WebhookHandler
+from gh_pr.webhooks.handlers import WebhookHandler, EventHandler
 from gh_pr.webhooks.events import WebhookEvent, EventType
 from gh_pr.plugins.manager import PluginManager
 from gh_pr.core.multi_repo import MultiRepoManager
@@ -65,33 +65,42 @@ class TestEndToEndWorkflows(unittest.IsolatedAsyncioTestCase):
         workflow_executed = False
         pr_processed = None
 
-        async def handle_pr_event(event):
-            """Handle PR webhook event."""
-            nonlocal workflow_executed, pr_processed
-            workflow_executed = True
+        # Create a custom event handler class for testing
+        class TestPREventHandler(EventHandler):
+            """Test handler for PR events."""
 
-            # Extract PR data
-            pr_data = event.payload.get('pull_request', {})
-            pr_processed = pr_data.get('number')
+            async def can_handle(self, event: WebhookEvent) -> bool:
+                """Check if this handler can process PR events."""
+                return event.type == EventType.PULL_REQUEST
 
-            # Process PR
-            if event.action == 'opened':
-                # Send notification
-                await notif_manager.notify(
-                    f"New PR #{pr_data.get('number')}",
-                    pr_data.get('title', 'Untitled')
-                )
+            async def handle(self, event: WebhookEvent):
+                """Handle PR webhook event."""
+                nonlocal workflow_executed, pr_processed
+                workflow_executed = True
 
-                # Auto-label based on title/body
-                if 'bug' in pr_data.get('title', '').lower():
-                    return {'auto_label': 'bug'}
-                elif 'feature' in pr_data.get('title', '').lower():
-                    return {'auto_label': 'enhancement'}
+                # Extract PR data
+                pr_data = event.payload.get('pull_request', {})
+                pr_processed = pr_data.get('number')
 
-            return {'processed': True}
+                # Process PR
+                if event.action == 'opened':
+                    # Send notification
+                    await notif_manager.notify(
+                        f"New PR #{pr_data.get('number')}",
+                        pr_data.get('title', 'Untitled')
+                    )
 
-        # Register handler
-        webhook_handler.register_handler(EventType.PULL_REQUEST, handle_pr_event)
+                    # Auto-label based on title/body
+                    if 'bug' in pr_data.get('title', '').lower():
+                        return {'auto_label': 'bug'}
+                    elif 'feature' in pr_data.get('title', '').lower():
+                        return {'auto_label': 'enhancement'}
+
+                return {'processed': True}
+
+        # Create and add the handler instance
+        pr_event_handler = TestPREventHandler()
+        webhook_handler.add_handler(pr_event_handler)
 
         # Create webhook event directly
         event = WebhookEvent(
