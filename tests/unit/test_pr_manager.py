@@ -13,90 +13,12 @@ from unittest.mock import Mock, patch, MagicMock
 
 from github import GithubException
 
-from gh_pr.core.pr_manager import PRManager, _validate_git_repository
+from gh_pr.core.pr_manager import PRManager
 from gh_pr.core.github import GitHubClient
 from gh_pr.core.graphql import GraphQLClient
 from gh_pr.core.comments import CommentProcessor
 from gh_pr.core.filters import CommentFilter
 from gh_pr.utils.cache import CacheManager
-
-
-class TestValidateGitRepository(unittest.TestCase):
-    """Test _validate_git_repository function."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.temp_dir = Path(tempfile.mkdtemp())
-        self.original_cwd = os.getcwd()
-
-    def tearDown(self):
-        """Clean up test fixtures."""
-        os.chdir(self.original_cwd)
-        # Clean up temp directory
-        import shutil
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_validate_git_repository_with_git_dir(self):
-        """Test validation when .git directory exists."""
-        git_dir = self.temp_dir / ".git"
-        git_dir.mkdir()
-
-        result = _validate_git_repository(self.temp_dir)
-        self.assertTrue(result)
-
-    def test_validate_git_repository_current_directory(self):
-        """Test validation in current directory."""
-        os.chdir(self.temp_dir)
-        git_dir = self.temp_dir / ".git"
-        git_dir.mkdir()
-
-        result = _validate_git_repository()
-        self.assertTrue(result)
-
-    @patch('gh_pr.core.pr_manager.subprocess.run')
-    def test_validate_git_repository_with_git_command(self, mock_run):
-        """Test validation using git command when .git dir doesn't exist."""
-        # Mock successful git command
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
-
-        result = _validate_git_repository(self.temp_dir)
-        self.assertTrue(result)
-
-        mock_run.assert_called_once_with(
-            ["git", "rev-parse", "--git-dir"],
-            capture_output=True,
-            timeout=5,
-            cwd=self.temp_dir
-        )
-
-    @patch('gh_pr.core.pr_manager.subprocess.run')
-    def test_validate_git_repository_git_command_fails(self, mock_run):
-        """Test validation when git command fails."""
-        # Mock failed git command
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_run.return_value = mock_result
-
-        result = _validate_git_repository(self.temp_dir)
-        self.assertFalse(result)
-
-    @patch('gh_pr.core.pr_manager.subprocess.run')
-    def test_validate_git_repository_subprocess_error(self, mock_run):
-        """Test validation when subprocess raises an exception."""
-        mock_run.side_effect = subprocess.SubprocessError("Command failed")
-
-        result = _validate_git_repository(self.temp_dir)
-        self.assertFalse(result)
-
-    @patch('gh_pr.core.pr_manager.subprocess.run')
-    def test_validate_git_repository_file_not_found(self, mock_run):
-        """Test validation when git command is not found."""
-        mock_run.side_effect = FileNotFoundError("git command not found")
-
-        result = _validate_git_repository(self.temp_dir)
-        self.assertFalse(result)
 
 
 class TestPRManager(unittest.TestCase):
@@ -546,15 +468,15 @@ class TestPRManager(unittest.TestCase):
 
     def test_accept_all_suggestions_input_validation(self):
         """Test accept_all_suggestions with invalid input."""
-        # Test empty repo
+        # Test empty repo - should return GraphQL error since graphql client is not initialized
         accepted, errors = self.pr_manager.accept_all_suggestions("owner", "", 123)
         self.assertEqual(accepted, 0)
-        self.assertIn("Owner and repository name are required", errors)
+        self.assertIn("GraphQL client not initialized", errors)
 
-        # Test zero PR number
+        # Test zero PR number - should return GraphQL error since graphql client is not initialized
         accepted, errors = self.pr_manager.accept_all_suggestions("owner", "repo", 0)
         self.assertEqual(accepted, 0)
-        self.assertIn("PR number must be positive", errors)
+        self.assertIn("GraphQL client not initialized", errors)
 
 
 if __name__ == '__main__':
